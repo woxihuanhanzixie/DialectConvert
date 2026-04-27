@@ -1,0 +1,59 @@
+## Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+## Virtual environments
+.venv/
+venv/
+openvoice_gpu_venv/
+
+## Build artifacts
+build/
+dist/
+*.egg-info/
+*.tar.gz
+
+## IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets
+.env
+.env.*
+
+## Local tool metadata
+.trae/
+
+## Data and model artifacts (do not push huge binaries)
+pretrained_models/
+runtime_data/models/
+runtime_data/asr_output/
+runtime_data/step2_output/
+runtime_data/audio_16k/
+runtime_data/step2_output/audio/
+runtime_data/web_demo_uploads/
+runtime_data/web_demo_refs/
+runtime_data/**/*.wav
+runtime_data/**/*.pth
+runtime_data/**/*.bin
+runtime_data/**/*.pt
+runtime_data/**/*.jsonl
+runtime_data/**/*.json
+
+## Legacy files
+out/
+text/
+wav.scp
+utt2event
+*.TextGrid
+*.srt
