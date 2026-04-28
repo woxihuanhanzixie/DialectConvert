@@ -19,20 +19,6 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
             "input_mode": tts.get("baseline_tts_input_mode", ""),
             "route_reason": "gold teacher 作为系统粤语发音金标准的兼容回退结果。",
         },
-        "legacy_text_clone": {
-            "route_name": "legacy_text_clone",
-            "wav_path": tts.get("wav_path", ""),
-            "tts_model": tts.get("tts_model", ""),
-            "tts_voice": tts.get("tts_voice", ""),
-            "error": tts.get("error", ""),
-            "input_text": tts.get("tts_input_text", ""),
-            "input_mode": tts.get("tts_input_mode", ""),
-            "voice_clone_enabled": tts.get("voice_clone_enabled", False),
-            "voice_clone_provider": tts.get("voice_clone_provider", ""),
-            "speaker_similarity_priority": tts.get("speaker_similarity_priority", "high"),
-            "tts_fluency_mode": tts.get("tts_fluency_mode", "allow_rate_adjust"),
-            "route_reason": "legacy 文本克隆链路的兼容回退结果。",
-        },
         "voice_matched": {
             "route_name": "voice_matched",
             "wav_path": "",
@@ -51,7 +37,7 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
     if route_name == "baseline":
         return fallback_map["gold_teacher"]
     if route_name == "clone":
-        return fallback_map["legacy_text_clone"]
+        return fallback_map["voice_matched"]
     return fallback_map.get(route_name, {"route_name": route_name})
 
 
@@ -92,9 +78,8 @@ def _route_label(route_name: str) -> str:
     mapping = {
         "gold_teacher": "Gold Teacher",
         "voice_matched": "Voice Matched",
-        "legacy_text_clone": "旧文本克隆",
         "baseline": "Gold Teacher",
-        "clone": "旧文本克隆",
+        "clone": "Voice Matched",
     }
     return mapping.get(route_name, route_name or "未知链路")
 
@@ -103,9 +88,8 @@ def _recommended_route_label(route_name: str) -> str:
     mapping = {
         "gold_teacher": "Gold Teacher 音频",
         "voice_matched": "Voice Matched 音频",
-        "legacy_text_clone": "旧文本克隆音频",
         "baseline": "Gold Teacher 音频",
-        "clone": "旧文本克隆音频",
+        "clone": "Voice Matched 音频",
     }
     return mapping.get(route_name, route_name or "未知音频")
 
@@ -139,10 +123,9 @@ def build_recommendation_markdown(result: dict[str, Any]) -> str:
     voice_match_summary = tts.get("voice_match_summary") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
     voice_matched_route = _resolve_route(tts, "voice_matched")
-    legacy_clone_route = _resolve_route(tts, "legacy_text_clone")
     recommended_route = tts.get("recommended_main_output") or gap_summary.get("recommended_route") or "gold_teacher"
     recommended_label = _recommended_route_label(recommended_route)
-    listen_order = "先听 Gold Teacher，再听 Voice Matched，最后再听旧文本克隆。"
+    listen_order = "先听 Gold Teacher，再听 Voice Matched。"
     return "\n".join(
         [
             "### 试听建议",
@@ -152,7 +135,6 @@ def build_recommendation_markdown(result: dict[str, Any]) -> str:
             f"- 推荐原因：{gap_summary.get('recommended_reason') or '无'}",
             f"- Gold Teacher 输入层：{_input_mode_label(teacher_route.get('input_mode') or '')}",
             f"- Voice Matched 输入层：{_input_mode_label(voice_matched_route.get('input_mode') or '')}",
-            f"- 旧文本克隆输入层：{_input_mode_label(legacy_clone_route.get('input_mode') or '')}",
         ]
     )
 
@@ -164,7 +146,6 @@ def build_text_compare_markdown(result: dict[str, Any]) -> str:
     tts = result.get("tts") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
     voice_matched_route = _resolve_route(tts, "voice_matched")
-    legacy_clone_route = _resolve_route(tts, "legacy_text_clone")
     rows = [
         ("原始 ASR", asr.get("punc_text") or asr.get("text") or "无"),
         ("审查后文本", review.get("asr_reviewed_text") or "无"),
@@ -178,10 +159,6 @@ def build_text_compare_markdown(result: dict[str, Any]) -> str:
         (
             f"Voice Matched 输入文本（{_input_mode_label(voice_matched_route.get('input_mode') or '')}）",
             voice_matched_route.get("input_text") or teacher_route.get("input_text") or "无",
-        ),
-        (
-            f"旧文本克隆输入文本（{_input_mode_label(legacy_clone_route.get('input_mode') or '')}）",
-            legacy_clone_route.get("input_text") or "无",
         ),
     ]
     lines = ["### 文本对比", "| 区域 | 内容 |", "| --- | --- |"]
@@ -198,14 +175,14 @@ def build_gap_summary_markdown(result: dict[str, Any]) -> str:
     return "\n".join(
         [
             "### 差距摘要",
-            f"- Teacher vs 旧克隆内容差异：{gap_summary.get('content_diff') or '无'}",
-            f"- Teacher vs 旧克隆发音差异：{gap_summary.get('pronunciation_diff') or '无'}",
-            f"- Teacher vs 旧克隆流畅度差异：{gap_summary.get('fluency_diff') or '无'}",
+            f"- Teacher vs Voice Matched 内容差异：{gap_summary.get('content_diff') or '无'}",
+            f"- Teacher vs Voice Matched 发音差异：{gap_summary.get('pronunciation_diff') or '无'}",
+            f"- Teacher vs Voice Matched 流畅度差异：{gap_summary.get('fluency_diff') or '无'}",
             f"- 路由摘要：{gap_summary.get('route_summary') or '无'}",
             f"- 处理分工：{gap_summary.get('processing_split') or '无'}",
             f"- 归因标签：{gap_summary.get('issue_tag_summary') or '无'}",
             f"- Gold Teacher 优点：{gap_summary.get('baseline_advantage') or '无'}",
-            f"- 旧文本克隆短板：{gap_summary.get('clone_weakness') or '无'}",
+            f"- Voice Matched 风险：{gap_summary.get('clone_weakness') or '无'}",
             f"- Voice Matched 可用：{'是' if voice_match_summary.get('voice_matched_available') else '否'}",
             f"- Voice Matched Provider：{voice_match_summary.get('voice_match_provider') or '无'}",
             f"- Voice Matched 错误：{voice_match_summary.get('voice_match_error') or '无'}",
@@ -214,15 +191,14 @@ def build_gap_summary_markdown(result: dict[str, Any]) -> str:
     )
 
 
-def build_route_cards_markdown(result: dict[str, Any]) -> tuple[str, str, str]:
+def build_route_cards_markdown(result: dict[str, Any]) -> tuple[str, str]:
     tts = result.get("tts") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
     voice_matched_route = _resolve_route(tts, "voice_matched")
-    legacy_clone_route = _resolve_route(tts, "legacy_text_clone")
     recommended_route = tts.get("recommended_main_output") or "gold_teacher"
 
     def _build(route: dict[str, Any]) -> str:
-        route_name = route.get("route_name") or "clone"
+        route_name = route.get("route_name") or "gold_teacher"
         is_recommended = route_name == recommended_route
         title = f"### {_route_label(route_name)}{'（推荐先听）' if is_recommended else ''}"
         return "\n".join(
@@ -237,7 +213,7 @@ def build_route_cards_markdown(result: dict[str, Any]) -> tuple[str, str, str]:
             ]
         )
 
-    return _build(teacher_route), _build(voice_matched_route), _build(legacy_clone_route)
+    return _build(teacher_route), _build(voice_matched_route)
 
 
 def human_review_markdown(result: dict[str, Any]) -> str:
@@ -247,7 +223,6 @@ def human_review_markdown(result: dict[str, Any]) -> str:
     tts = result.get("tts") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
     voice_matched_route = _resolve_route(tts, "voice_matched")
-    legacy_clone_route = _resolve_route(tts, "legacy_text_clone")
     gap_summary = tts.get("gap_summary") or {}
     voice_match_summary = tts.get("voice_match_summary") or {}
     source_audio = result.get("source_audio") or {}
@@ -291,13 +266,6 @@ def human_review_markdown(result: dict[str, Any]) -> str:
             f"- Voice Matched 路由说明：{voice_matched_route.get('route_reason') or '无'}",
             f"- Voice Matched 音频文件：{Path(voice_matched_route.get('wav_path', '')).name if voice_matched_route.get('wav_path') else '无'}",
             f"- Voice Matched 错误：{voice_matched_route.get('error') or '无'}",
-            f"- 旧文本克隆来源：{legacy_clone_route.get('voice_clone_provider') or '系统音色'}",
-            f"- 旧文本克隆音色优先级：{legacy_clone_route.get('speaker_similarity_priority') or 'high'}",
-            f"- 旧文本克隆流畅度模式：{legacy_clone_route.get('tts_fluency_mode') or 'allow_rate_adjust'}",
-            f"- 旧文本克隆输入模式：{_input_mode_label(legacy_clone_route.get('input_mode') or '')}",
-            f"- 旧文本克隆输入文本：{legacy_clone_route.get('input_text') or '无'}",
-            f"- 旧文本克隆路由说明：{legacy_clone_route.get('route_reason') or '无'}",
-            f"- 旧文本克隆音频文件：{Path(legacy_clone_route.get('wav_path', '')).name if legacy_clone_route.get('wav_path') else '无'}",
             f"- 内容差异：{gap_summary.get('content_diff') or '无'}",
             f"- 发音差异：{gap_summary.get('pronunciation_diff') or '无'}",
             f"- 流畅度差异：{gap_summary.get('fluency_diff') or '无'}",
@@ -308,6 +276,6 @@ def human_review_markdown(result: dict[str, Any]) -> str:
             f"- 推荐策略：{voice_match_summary.get('recommendation_reason') or gap_summary.get('recommended_strategy') or '无'}",
             f"- 推荐原因：{gap_summary.get('recommended_reason') or '无'}",
             f"- Gold Teacher 优点：{gap_summary.get('baseline_advantage') or '无'}",
-            f"- 旧文本克隆缺点：{gap_summary.get('clone_weakness') or '无'}",
+            f"- Voice Matched 风险：{gap_summary.get('clone_weakness') or '无'}",
         ]
     )

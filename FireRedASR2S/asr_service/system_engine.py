@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +34,9 @@ class AsrSystemEngine:
             enable_lid=self.cfg.enable_lid_default if enable_lid is None else enable_lid,
             enable_punc=self.cfg.enable_punc_default if enable_punc is None else enable_punc,
         )
+        t0 = time.perf_counter()
         result = system.process(str(wav_path), Path(wav_path).stem)
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         detected_languages: list[dict[str, Any]] = []
         for sentence in result.get("sentences", []):
             lang = sentence.get("lang")
@@ -57,7 +60,7 @@ class AsrSystemEngine:
             "sentences": result.get("sentences", []),
             "words": result.get("words", []),
             "detected_languages": detected_languages,
-            "latency_ms": 0.0,
+            "latency_ms": latency_ms,
         }
 
     def health(self) -> dict[str, Any]:
@@ -83,7 +86,10 @@ class AsrSystemEngine:
                 extend_speech_frame=5,
                 chunk_max_frame=30000,
             )
-            lid_config = FireRedLidConfig(use_gpu=self.cfg.use_gpu, use_half=False)
+            lid_config = FireRedLidConfig(
+                use_gpu=self.cfg.use_gpu,
+                use_half=self.cfg.use_half if self.cfg.use_gpu else False,
+            )
             asr_config = FireRedAsr2Config(
                 use_gpu=self.cfg.use_gpu,
                 use_half=self.cfg.use_half,
@@ -106,8 +112,8 @@ class AsrSystemEngine:
                 lid_config=lid_config,
                 asr_config=asr_config,
                 punc_config=punc_config,
-                asr_batch_size=1,
-                punc_batch_size=8,
+                asr_batch_size=max(1, self.cfg.batch_size),
+                punc_batch_size=max(1, self.cfg.batch_size),
                 enable_vad=enable_vad and Path(self.cfg.vad_model_dir).exists(),
                 enable_lid=enable_lid and Path(self.cfg.lid_model_dir).exists(),
                 enable_punc=enable_punc,

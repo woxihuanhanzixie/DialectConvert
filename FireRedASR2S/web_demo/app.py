@@ -56,25 +56,7 @@ def _resolve_route(tts: dict, route_name: str) -> dict:
             "tts_fluency_mode": "allow_rate_adjust",
             "route_reason": "",
         }
-    return {
-        "route_name": "legacy_text_clone",
-        "wav_path": tts.get("wav_path", ""),
-        "audio_url": tts.get("audio_url", ""),
-        "tts_model": tts.get("tts_model", ""),
-        "tts_voice": tts.get("tts_voice", ""),
-        "error": tts.get("error", ""),
-        "input_text": tts.get("tts_input_text", ""),
-        "input_mode": tts.get("tts_input_mode", ""),
-        "audio_meta": tts.get("audio_meta"),
-        "voice_clone_enabled": tts.get("voice_clone_enabled", False),
-        "voice_clone_provider": tts.get("voice_clone_provider", ""),
-        "speaker_similarity_note": tts.get("speaker_similarity_note", ""),
-        "clone_mode": tts.get("clone_mode", ""),
-        "fallback_reason": tts.get("fallback_reason", ""),
-        "speaker_similarity_priority": tts.get("speaker_similarity_priority", "high"),
-        "tts_fluency_mode": tts.get("tts_fluency_mode", "allow_rate_adjust"),
-        "route_reason": "",
-    }
+    return {"route_name": route_name}
 
 
 def _prepare_preview_file(wav_path: str, trace_id: str, slot_name: str) -> str | None:
@@ -125,7 +107,6 @@ def process_audio(
     ref_frontend = clone_ref_audio.get("audio_frontend") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
     voice_matched_route = _resolve_route(tts, "voice_matched")
-    legacy_clone_route = _resolve_route(tts, "legacy_text_clone")
     gap_summary = tts.get("gap_summary") or {}
     voice_match_summary = tts.get("voice_match_summary") or {}
     clone_ref_source = clone_ref_audio.get("source", "")
@@ -140,8 +121,6 @@ def process_audio(
     teacher_download_audio = None
     voice_matched_audio = None
     voice_matched_download_audio = None
-    legacy_clone_audio = None
-    legacy_clone_download_audio = None
     if teacher_route.get("wav_path") and Path(teacher_route["wav_path"]).exists():
         teacher_preview = _prepare_preview_file(
             teacher_route["wav_path"],
@@ -158,20 +137,14 @@ def process_audio(
         )
         voice_matched_audio = vm_preview
         voice_matched_download_audio = vm_preview
-    if legacy_clone_route.get("wav_path") and Path(legacy_clone_route["wav_path"]).exists():
-        legacy_preview = _prepare_preview_file(
-            legacy_clone_route["wav_path"],
-            result.get("trace_id", ""),
-            "legacy_text_clone",
-        )
-        legacy_clone_audio = legacy_preview
-        legacy_clone_download_audio = legacy_preview
     latencies = "\n".join(
         [
             f"ASR: {asr.get('latency_ms', 0)} ms",
             f"Review: {review.get('review_latency_ms', 0)} ms",
             f"Rewrite: {rewrite.get('llm_latency_ms', 0)} ms",
-            f"TTS: {tts.get('latency_ms', 0)} ms",
+            f"Gold Teacher: {(tts.get('gold_teacher') or {}).get('latency_ms', 0)} ms",
+            f"Voice Matched: {(tts.get('voice_matched') or {}).get('latency_ms', 0)} ms",
+            f"TTS Total: {tts.get('latency_ms', 0)} ms",
             f"Total: {result.get('total_latency_ms', 0)} ms",
         ]
     )
@@ -193,12 +166,10 @@ def process_audio(
             f"拼接片段数: {ref_frontend.get('speech_segment_count', 0)}",
             f"拼接后时长: {ref_frontend.get('concat_duration_s', '无')}",
             f"Voice Matched Provider: {voice_match_summary.get('voice_match_provider') or voice_matched_route.get('voice_clone_provider') or '无'}",
-            f"旧文本克隆 Provider: {legacy_clone_route.get('voice_clone_provider') or '系统音色'}",
-            f"音色优先级: {legacy_clone_route.get('speaker_similarity_priority') or 'high'}",
-            f"流畅度模式: {legacy_clone_route.get('tts_fluency_mode') or 'allow_rate_adjust'}",
+            f"音色优先级: {voice_matched_route.get('speaker_similarity_priority') or 'high'}",
+            f"流畅度模式: {voice_matched_route.get('tts_fluency_mode') or 'allow_rate_adjust'}",
             f"Gold Teacher 输入模式: {teacher_route.get('input_mode') or '未知'}",
             f"Voice Matched 输入模式: {voice_matched_route.get('input_mode') or '未知'}",
-            f"旧文本克隆输入模式: {legacy_clone_route.get('input_mode') or '未知'}",
             f"推荐主输出: {tts.get('recommended_main_output') or 'gold_teacher'}",
             f"推荐策略: {voice_match_summary.get('recommendation_reason') or gap_summary.get('recommended_strategy') or '无'}",
             f"Voice Matched 说明: {voice_matched_route.get('speaker_similarity_note') or '无'}",
@@ -221,7 +192,7 @@ def process_audio(
     recommendation_md = build_recommendation_markdown(result)
     text_compare_md = build_text_compare_markdown(result)
     gap_summary_md = build_gap_summary_markdown(result)
-    teacher_card_md, voice_matched_card_md, legacy_clone_card_md = build_route_cards_markdown(result)
+    teacher_card_md, voice_matched_card_md = build_route_cards_markdown(result)
     return (
         asr.get("punc_text") or asr.get("text") or "",
         review.get("asr_reviewed_text") or "",
@@ -236,17 +207,14 @@ def process_audio(
         latencies,
         (voice_matched_route.get("error") or "")
         + (f"\nGold Teacher 错误: {teacher_route.get('error')}" if teacher_route.get("error") else "")
-        + (f"\n旧文本克隆错误: {legacy_clone_route.get('error')}" if legacy_clone_route.get("error") else ""),
+        ,
         teacher_audio,
         teacher_download_audio,
         voice_matched_audio,
         voice_matched_download_audio,
-        legacy_clone_audio,
-        legacy_clone_download_audio,
         recommendation_md,
         teacher_card_md,
         voice_matched_card_md,
-        legacy_clone_card_md,
         text_compare_md,
         gap_summary_md,
         human_review_markdown(result),
@@ -316,10 +284,6 @@ def build_demo() -> gr.Blocks:
                                 voice_matched_audio = gr.Audio(label="Voice Matched 音频")
                                 voice_matched_download_audio = gr.File(label="下载 Voice Matched 音频")
                                 voice_matched_card_md = gr.Markdown()
-                            with gr.Column():
-                                legacy_clone_audio = gr.Audio(label="旧文本克隆音频")
-                                legacy_clone_download_audio = gr.File(label="下载旧文本克隆音频")
-                                legacy_clone_card_md = gr.Markdown()
                         text_compare_md = gr.Markdown()
                         gap_summary_md = gr.Markdown()
                     with gr.Column(scale=1):
@@ -359,12 +323,9 @@ def build_demo() -> gr.Blocks:
                         teacher_download_audio,
                         voice_matched_audio,
                         voice_matched_download_audio,
-                        legacy_clone_audio,
-                        legacy_clone_download_audio,
                         recommendation_md,
                         teacher_card_md,
                         voice_matched_card_md,
-                        legacy_clone_card_md,
                         text_compare_md,
                         gap_summary_md,
                         review_md,

@@ -17,7 +17,6 @@ from .adapters import (
     rewrite_text,
     translate_en_to_pivot_zh,
     tts_gold_teacher,
-    tts_text,
     tts_voice_match_from_teacher,
 )
 
@@ -33,37 +32,6 @@ class DialectPipelineEngine:
             "qwen_tts_voice": self.cfg.qwen_tts_voice,
             "output_dir": str(self.cfg.output_dir),
         }
-
-    def _resolve_clone_route_input(self, rewrite: dict[str, Any] | None, fallback_text: str) -> tuple[str, str, str]:
-        if not rewrite:
-            return (
-                fallback_text,
-                "review_text",
-                "未生成改写层时，克隆链路回退到审查文本，优先保证可生成。",
-            )
-        target_text = (
-            rewrite.get("prosody_text")
-            or rewrite.get("pronunciation_text")
-            or rewrite.get("semantic_text")
-            or rewrite.get("dialect_text")
-            or fallback_text
-        )
-        input_mode = (
-            "prosody_text"
-            if rewrite.get("prosody_text")
-            else (
-                "pronunciation_text"
-                if rewrite.get("pronunciation_text")
-                else ("semantic_text" if rewrite.get("semantic_text") else "dialect_text")
-            )
-        )
-        reason_map = {
-            "prosody_text": "克隆链路默认消费韵律层，集中承接连接词、停顿和口语衔接调整，同时验证声纹承载能力。",
-            "pronunciation_text": "克隆链路退回发音层，优先验证专名和口语读法修正，不额外叠加韵律风险。",
-            "semantic_text": "克隆链路退回语义层，当前仅验证改写文本与声纹承载，不做细粒度发音/韵律控制。",
-            "dialect_text": "克隆链路仅拿到基础方言文本，作为最小可用输入继续生成。",
-        }
-        return target_text, input_mode, reason_map.get(input_mode, "克隆链路使用默认输入文本。")
 
     def _resolve_baseline_route_input(self, rewrite: dict[str, Any] | None, fallback_text: str) -> tuple[str, str, str]:
         if not rewrite:
@@ -129,95 +97,63 @@ class DialectPipelineEngine:
     def _build_gap_summary(
         self,
         *,
-        baseline_route: dict[str, Any],
-        clone_route: dict[str, Any],
-        rewrite: dict[str, Any] | None,
-        voice_clone_enabled: bool,
+        teacher_route: dict[str, Any],
+        voice_matched_route: dict[str, Any],
     ) -> dict[str, Any]:
-        baseline_mode = baseline_route.get("input_mode") or "review_text"
-        clone_mode = clone_route.get("input_mode") or "review_text"
-        baseline_text = baseline_route.get("input_text") or ""
-        clone_text = clone_route.get("input_text") or ""
-        clone_error = clone_route.get("error") or ""
-        baseline_error = baseline_route.get("error") or ""
-        pronunciation_hits = rewrite.get("pronunciation_rule_hits") if rewrite else []
-        prosody_hits = rewrite.get("prosody_rule_hits") if rewrite else []
-        pronunciation_categories = rewrite.get("pronunciation_hit_categories") if rewrite else []
-        prosody_categories = rewrite.get("prosody_hit_categories") if rewrite else []
+        teacher_mode = teacher_route.get("input_mode") or "review_text"
+        matched_available = bool(voice_matched_route.get("wav_path")) and not voice_matched_route.get("error")
+        voice_match_error = voice_matched_route.get("error") or ""
 
-        if baseline_text == clone_text:
-            content_diff = "两路输入文本一致，当前内容层没有额外分叉，重点应放在听感对比。"
+        content_diff = "Gold Teacher 与 Voice Matched 共享同一份 teacher 音频内容，差异主要来自音色迁移。"
+        pronunciation_diff = "Voice Matched 基于 Gold Teacher 音频做转换，不再单独改写文本或重做发音。"
+        if matched_available:
+            fluency_diff = "Voice Matched 额外承担音色迁移，可能引入轻微失真；Gold Teacher 通常更稳。"
         else:
-            content_diff = (
-                f"基线链路使用 {baseline_mode}，对比链路使用 {clone_mode}，"
-                "两路输入文本已经分层，便于区分自然度与声纹承载效果。"
-            )
-
-        if clone_mode == "prosody_text":
-            pronunciation_diff = "对比链路使用韵律润色文本，通常会保留更多停顿和口语连读写法，发音控制更激进。"
-        elif clone_mode == "pronunciation_text":
-            pronunciation_diff = "对比链路使用发音转写文本，更强调专名和口语读法；基线链路保留系统自然发音。"
-        else:
-            pronunciation_diff = "两路都未显式切到独立发音层，发音差异主要来自模型本身而不是输入文本。"
-
-        if clone_error:
-            fluency_diff = "对比链路当前生成异常，流畅度无法稳定评估，应优先以基线结果试听。"
-        elif voice_clone_enabled and clone_mode == "prosody_text":
-            fluency_diff = "对比链路同时承担声纹克隆和韵律写法，句间衔接更容易变硬，基线通常更稳。"
-        elif voice_clone_enabled:
-            fluency_diff = "对比链路承担声纹承载任务，整体流畅度风险通常高于不带克隆负担的基线链路。"
-        elif clone_mode != baseline_mode:
-            fluency_diff = "当前是双文本双策略对比，基线更偏系统自然度，对比链路更偏发音或韵律控制。"
-        else:
-            fluency_diff = "两路流畅度策略接近，建议以实际听感为准做后续调参。"
+            fluency_diff = "当前 Voice Matched 不可用，主试听结果回退为 Gold Teacher。"
 
         route_summary = (
-            f"基线链路固定承担稳定参考，默认输入为 {baseline_mode}；"
-            f"克隆链路承担控制增强与声纹验证，默认输入为 {clone_mode}。"
+            f"Gold Teacher 固定负责“怎么说”，输入层为 {teacher_mode}；"
+            "Voice Matched 只负责“像谁说”，基于 teacher 音频做音色转换。"
         )
-        processing_split = self._build_processing_split(pronunciation_categories, prosody_categories, clone_mode)
-        issue_tags = self._build_issue_tags(
-            baseline_mode=baseline_mode,
-            clone_mode=clone_mode,
-            baseline_error=baseline_error,
-            clone_error=clone_error,
-            voice_clone_enabled=voice_clone_enabled,
-            pronunciation_hits=pronunciation_hits or [],
-            prosody_hits=prosody_hits or [],
-        )
+        processing_split = "文本改写、发音与韵律控制由 Gold Teacher 完成；音色相似度由 Voice Matched 承担。"
+        issue_tags: list[dict[str, Any]] = []
+        if teacher_route.get("error"):
+            issue_tags.append(
+                {
+                    "layer": "content",
+                    "tag": "teacher_generation_error",
+                    "route": "gold_teacher",
+                    "severity": "high",
+                    "reason": f"Gold Teacher 生成异常: {teacher_route.get('error')}",
+                }
+            )
+        if voice_match_error:
+            issue_tags.append(
+                {
+                    "layer": "clone_carrier",
+                    "tag": "voice_match_error",
+                    "route": "voice_matched",
+                    "severity": "high",
+                    "reason": f"Voice Matched 生成异常: {voice_match_error}",
+                }
+            )
+        elif voice_matched_route.get("voice_clone_enabled"):
+            issue_tags.append(
+                {
+                    "layer": "clone_carrier",
+                    "tag": "voice_match_active",
+                    "route": "voice_matched",
+                    "severity": "medium",
+                    "reason": "Voice Matched 已启用，需重点对听音色相似度与自然度损失。",
+                }
+            )
         issue_tag_summary = self._summarize_issue_tags(issue_tags)
 
-        recommended_route = "baseline"
-        recommended_strategy = "先听基线，再决定是否保留克隆链路增强。"
-        recommended_reason = "基线链路更适合作为首听参考，便于先确认内容与自然度是否稳定。"
-        if baseline_error and not clone_error:
-            recommended_route = "clone"
-            recommended_strategy = "基线异常，直接以克隆链路作为本轮主结果。"
-            recommended_reason = "基线链路当前生成异常，对比链路可作为本轮试听主结果。"
-        elif clone_error and not baseline_error:
-            recommended_route = "baseline"
-            recommended_strategy = "克隆异常，回到基线链路完成试听与验收。"
-            recommended_reason = "对比链路生成异常，当前应优先试听基线链路。"
-        elif voice_clone_enabled and clone_mode == "prosody_text":
-            recommended_route = "baseline"
-            recommended_strategy = "先用基线确认自然度，再用克隆核对专名和声纹收益。"
-            recommended_reason = "克隆链路同时承担声纹与韵律控制，适合做增益对比，不宜直接取代基线首听。"
-        elif voice_clone_enabled and clone_mode == "pronunciation_text":
-            recommended_route = "clone"
-            recommended_strategy = "先听克隆确认专名读法，再回听基线判断自然度是否被破坏。"
-            recommended_reason = "当前克隆链路聚焦发音层，能更直接验证专名和口语读法修正收益。"
-        elif not voice_clone_enabled and clone_mode in {"prosody_text", "pronunciation_text"}:
-            recommended_route = "clone"
-            recommended_strategy = "无声纹负担时优先试听克隆链路，直接验证文本控制收益。"
-            recommended_reason = "当前未启用声纹克隆，对比链路能更直接验证发音或韵律文本带来的收益。"
-
-        baseline_advantage = "基线链路更接近系统默认自然度，适合作为内容正确性和句间衔接的参考。"
-        clone_weakness = (
-            "对比链路更容易受到专名纠音、停顿写法或声纹承载负担影响，需要和基线对听判断是否值得保留。"
-        )
-        if recommended_route == "clone":
-            baseline_advantage = "基线链路可继续作为稳定兜底，用于判断对比链路是否出现明显劣化。"
-            clone_weakness = "当前对比链路已经带来更强的发音或韵律控制，但仍需关注是否引入生硬停顿。"
+        recommended_route = "voice_matched" if matched_available else "gold_teacher"
+        recommended_strategy = "先听 Gold Teacher 确认发音，再听 Voice Matched 判断音色迁移是否值得保留。"
+        recommended_reason = "Voice Matched 只在成功生成时作为主输出，否则保持 Gold Teacher 兜底。"
+        baseline_advantage = "Gold Teacher 不承担音色迁移，通常在发音稳定性和流畅度上更可靠。"
+        clone_weakness = "Voice Matched 依赖额外的音色转换步骤，可能增加耗时并引入轻微失真。"
 
         return {
             "content_diff": content_diff,
@@ -418,9 +354,7 @@ class DialectPipelineEngine:
 
         tts = None
         if enable_tts:
-            target_text, tts_input_mode, clone_route_reason = self._resolve_clone_route_input(rewrite, review_text_value)
-            baseline_text, baseline_input_mode, baseline_route_reason = self._resolve_baseline_route_input(rewrite, review_text_value)
-            legacy_clone_wav_path = self._build_wav_path(trace_id)
+            baseline_text, baseline_input_mode, _ = self._resolve_baseline_route_input(rewrite, review_text_value)
             old_voice = self.cfg.qwen_tts_voice
             if voice:
                 self.cfg.qwen_tts_voice = voice
@@ -430,14 +364,6 @@ class DialectPipelineEngine:
                 baseline_text,
                 self.cfg,
                 teacher_wav_path,
-            )
-            legacy_clone_result = tts_text(
-                target_text,
-                self.cfg,
-                legacy_clone_wav_path,
-                voice_clone_enabled=voice_clone_enabled,
-                speaker_ref_audio=speaker_ref_audio,
-                preferred_name=f"vc_{uuid.uuid4().hex[:8]}",
             )
             voice_matched_wav_path = self._build_wav_path(f"{trace_id}_voice_matched")
             if voice_clone_enabled and speaker_ref_audio and teacher_result.get("wav_path"):
@@ -464,15 +390,6 @@ class DialectPipelineEngine:
                     "instruction_mode_active": False,
                 }
             self.cfg.qwen_tts_voice = old_voice
-            legacy_clone_route = self._build_route_payload(
-                "legacy_text_clone",
-                legacy_clone_result,
-                input_text=target_text,
-                input_mode=tts_input_mode,
-                route_reason=clone_route_reason,
-                default_voice=active_voice,
-                voice_clone_enabled=voice_clone_enabled,
-            )
             teacher_route = self._build_route_payload(
                 "gold_teacher",
                 teacher_result,
@@ -496,10 +413,8 @@ class DialectPipelineEngine:
             voice_matched_route["voice_clone_provider"] = voice_matched_result.get("voice_clone_provider") or self.cfg.voice_conversion_provider
             voice_matched_route["route_role"] = "voice_identity_transfer"
             gap_summary = self._build_gap_summary(
-                baseline_route=teacher_route,
-                clone_route=legacy_clone_route,
-                rewrite=rewrite,
-                voice_clone_enabled=voice_clone_enabled,
+                teacher_route=teacher_route,
+                voice_matched_route=voice_matched_route,
             )
             voice_match_summary = self._build_voice_match_summary(
                 teacher_route=teacher_route,
@@ -511,26 +426,27 @@ class DialectPipelineEngine:
             )
             gap_summary["recommended_route"] = recommended_main_output
             gap_summary["recommended_reason"] = voice_match_summary["recommendation_reason"]
+            primary_route = voice_matched_route if recommended_main_output == "voice_matched" else teacher_route
             tts = {
-                "wav_path": legacy_clone_route["wav_path"],
-                "audio_url": legacy_clone_route["audio_url"],
-                "expires_at": legacy_clone_route["expires_at"],
-                "tts_model": legacy_clone_route["tts_model"],
-                "tts_voice": legacy_clone_route["tts_voice"],
-                "latency_ms": legacy_clone_route["latency_ms"],
-                "error": legacy_clone_route["error"],
-                "voice_clone_enabled": legacy_clone_route["voice_clone_enabled"],
-                "voice_clone_provider": legacy_clone_route["voice_clone_provider"],
-                "speaker_similarity_note": legacy_clone_route["speaker_similarity_note"],
-                "clone_mode": legacy_clone_route["clone_mode"],
-                "fallback_reason": legacy_clone_route["fallback_reason"],
-                "speaker_similarity_priority": legacy_clone_route["speaker_similarity_priority"],
-                "tts_fluency_mode": legacy_clone_route["tts_fluency_mode"],
-                "tts_style_instructions": legacy_clone_route["tts_style_instructions"],
-                "instruction_mode_active": legacy_clone_route["instruction_mode_active"],
-                "tts_input_text": legacy_clone_route["input_text"],
-                "tts_input_mode": legacy_clone_route["input_mode"],
-                "audio_meta": legacy_clone_route["audio_meta"],
+                "wav_path": primary_route["wav_path"],
+                "audio_url": primary_route["audio_url"],
+                "expires_at": primary_route["expires_at"],
+                "tts_model": primary_route["tts_model"],
+                "tts_voice": primary_route["tts_voice"],
+                "latency_ms": round(float(teacher_route["latency_ms"]) + float(voice_matched_route["latency_ms"]), 2),
+                "error": primary_route["error"],
+                "voice_clone_enabled": voice_matched_route["voice_clone_enabled"],
+                "voice_clone_provider": voice_matched_route["voice_clone_provider"],
+                "speaker_similarity_note": primary_route["speaker_similarity_note"],
+                "clone_mode": primary_route["clone_mode"],
+                "fallback_reason": primary_route["fallback_reason"],
+                "speaker_similarity_priority": primary_route["speaker_similarity_priority"],
+                "tts_fluency_mode": primary_route["tts_fluency_mode"],
+                "tts_style_instructions": primary_route["tts_style_instructions"],
+                "instruction_mode_active": primary_route["instruction_mode_active"],
+                "tts_input_text": teacher_route["input_text"],
+                "tts_input_mode": teacher_route["input_mode"],
+                "audio_meta": primary_route["audio_meta"],
                 "baseline_wav_path": teacher_route["wav_path"],
                 "baseline_audio_url": teacher_route["audio_url"],
                 "baseline_tts_model": teacher_route["tts_model"],
@@ -540,11 +456,11 @@ class DialectPipelineEngine:
                 "baseline_tts_input_mode": teacher_route["input_mode"],
                 "baseline_audio_meta": teacher_route["audio_meta"],
                 "baseline": teacher_route,
-                "clone": legacy_clone_route,
+                "clone": voice_matched_route,
                 "gap_summary": gap_summary,
                 "gold_teacher": teacher_route,
                 "voice_matched": voice_matched_route,
-                "legacy_text_clone": legacy_clone_route,
+                "legacy_text_clone": None,
                 "recommended_main_output": recommended_main_output,
                 "voice_match_summary": voice_match_summary,
                 "timbre_ref_audio": str(speaker_ref_audio) if speaker_ref_audio else "",
@@ -613,9 +529,7 @@ class DialectPipelineEngine:
 
         tts = None
         if enable_tts:
-            target_text, tts_input_mode, clone_route_reason = self._resolve_clone_route_input(rewrite, review["asr_reviewed_text"])
-            baseline_text, baseline_input_mode, baseline_route_reason = self._resolve_baseline_route_input(rewrite, review["asr_reviewed_text"])
-            legacy_clone_wav_out = self._build_wav_path(Path(wav_path).stem)
+            baseline_text, baseline_input_mode, _ = self._resolve_baseline_route_input(rewrite, review["asr_reviewed_text"])
             old_voice = self.cfg.qwen_tts_voice
             if voice:
                 self.cfg.qwen_tts_voice = voice
@@ -625,14 +539,6 @@ class DialectPipelineEngine:
                 baseline_text,
                 self.cfg,
                 teacher_wav_out,
-            )
-            legacy_clone_result = tts_text(
-                target_text,
-                self.cfg,
-                legacy_clone_wav_out,
-                voice_clone_enabled=voice_clone_enabled,
-                speaker_ref_audio=speaker_ref_audio,
-                preferred_name=f"vc_{uuid.uuid4().hex[:8]}",
             )
             voice_matched_wav_out = self._build_wav_path(f"{Path(wav_path).stem}_voice_matched")
             if voice_clone_enabled and speaker_ref_audio and teacher_result.get("wav_path"):
@@ -659,15 +565,6 @@ class DialectPipelineEngine:
                     "instruction_mode_active": False,
                 }
             self.cfg.qwen_tts_voice = old_voice
-            legacy_clone_route = self._build_route_payload(
-                "legacy_text_clone",
-                legacy_clone_result,
-                input_text=target_text,
-                input_mode=tts_input_mode,
-                route_reason=clone_route_reason,
-                default_voice=active_voice,
-                voice_clone_enabled=voice_clone_enabled,
-            )
             teacher_route = self._build_route_payload(
                 "gold_teacher",
                 teacher_result,
@@ -691,10 +588,8 @@ class DialectPipelineEngine:
             voice_matched_route["voice_clone_provider"] = voice_matched_result.get("voice_clone_provider") or self.cfg.voice_conversion_provider
             voice_matched_route["route_role"] = "voice_identity_transfer"
             gap_summary = self._build_gap_summary(
-                baseline_route=teacher_route,
-                clone_route=legacy_clone_route,
-                rewrite=rewrite,
-                voice_clone_enabled=voice_clone_enabled,
+                teacher_route=teacher_route,
+                voice_matched_route=voice_matched_route,
             )
             voice_match_summary = self._build_voice_match_summary(
                 teacher_route=teacher_route,
@@ -706,26 +601,27 @@ class DialectPipelineEngine:
             )
             gap_summary["recommended_route"] = recommended_main_output
             gap_summary["recommended_reason"] = voice_match_summary["recommendation_reason"]
+            primary_route = voice_matched_route if recommended_main_output == "voice_matched" else teacher_route
             tts = {
-                "wav_path": legacy_clone_route["wav_path"],
-                "audio_url": legacy_clone_route["audio_url"],
-                "expires_at": legacy_clone_route["expires_at"],
-                "tts_model": legacy_clone_route["tts_model"],
-                "tts_voice": legacy_clone_route["tts_voice"],
-                "latency_ms": legacy_clone_route["latency_ms"],
-                "error": legacy_clone_route["error"],
-                "voice_clone_enabled": legacy_clone_route["voice_clone_enabled"],
-                "voice_clone_provider": legacy_clone_route["voice_clone_provider"],
-                "speaker_similarity_note": legacy_clone_route["speaker_similarity_note"],
-                "clone_mode": legacy_clone_route["clone_mode"],
-                "fallback_reason": legacy_clone_route["fallback_reason"],
-                "speaker_similarity_priority": legacy_clone_route["speaker_similarity_priority"],
-                "tts_fluency_mode": legacy_clone_route["tts_fluency_mode"],
-                "tts_style_instructions": legacy_clone_route["tts_style_instructions"],
-                "instruction_mode_active": legacy_clone_route["instruction_mode_active"],
-                "tts_input_text": legacy_clone_route["input_text"],
-                "tts_input_mode": legacy_clone_route["input_mode"],
-                "audio_meta": legacy_clone_route["audio_meta"],
+                "wav_path": primary_route["wav_path"],
+                "audio_url": primary_route["audio_url"],
+                "expires_at": primary_route["expires_at"],
+                "tts_model": primary_route["tts_model"],
+                "tts_voice": primary_route["tts_voice"],
+                "latency_ms": round(float(teacher_route["latency_ms"]) + float(voice_matched_route["latency_ms"]), 2),
+                "error": primary_route["error"],
+                "voice_clone_enabled": voice_matched_route["voice_clone_enabled"],
+                "voice_clone_provider": voice_matched_route["voice_clone_provider"],
+                "speaker_similarity_note": primary_route["speaker_similarity_note"],
+                "clone_mode": primary_route["clone_mode"],
+                "fallback_reason": primary_route["fallback_reason"],
+                "speaker_similarity_priority": primary_route["speaker_similarity_priority"],
+                "tts_fluency_mode": primary_route["tts_fluency_mode"],
+                "tts_style_instructions": primary_route["tts_style_instructions"],
+                "instruction_mode_active": primary_route["instruction_mode_active"],
+                "tts_input_text": teacher_route["input_text"],
+                "tts_input_mode": teacher_route["input_mode"],
+                "audio_meta": primary_route["audio_meta"],
                 "baseline_wav_path": teacher_route["wav_path"],
                 "baseline_audio_url": teacher_route["audio_url"],
                 "baseline_tts_model": teacher_route["tts_model"],
@@ -735,11 +631,11 @@ class DialectPipelineEngine:
                 "baseline_tts_input_mode": teacher_route["input_mode"],
                 "baseline_audio_meta": teacher_route["audio_meta"],
                 "baseline": teacher_route,
-                "clone": legacy_clone_route,
+                "clone": voice_matched_route,
                 "gap_summary": gap_summary,
                 "gold_teacher": teacher_route,
                 "voice_matched": voice_matched_route,
-                "legacy_text_clone": legacy_clone_route,
+                "legacy_text_clone": None,
                 "recommended_main_output": recommended_main_output,
                 "voice_match_summary": voice_match_summary,
                 "timbre_ref_audio": str(speaker_ref_audio) if speaker_ref_audio else "",
