@@ -1,0 +1,45 @@
+Timeout (0:00:12)!
+Thread 0x0000ce74 (most recent call first):
+  File "D:\Anaconda\envs\fireredasr2s\lib\genericpath.py", line 45 in isdir
+  File "D:\Anaconda\envs\fireredasr2s\lib\tempfile.py", line 262 in _mkstemp_inner
+  File "D:\Anaconda\envs\fireredasr2s\lib\tempfile.py", line 572 in opener
+  File "D:\Anaconda\envs\fireredasr2s\lib\tempfile.py", line 575 in NamedTemporaryFile
+  File "D:\Anaconda\envs\fireredasr2s\lib\site-packages\numba\core\caching.py", line 112 in ensure_cache_path
+  File "D:\Anaconda\envs\fireredasr2s\lib\site-packages\numba\core\caching.py", line 185 in from_function
+  File "D:\Anaconda\envs\fireredasr2s\lib\site-packages\numba\core\caching.py", line 419 in __init__
+  File "D:\Anaconda\envs\fireredasr2s\lib\site-packages\numba\core\caching.py", line 687 in __init__
+  File "D:\Anaconda\envs\fireredasr2s\lib\site-packages\numba\core\dispatcher.py", line 811 in enable_caching
+  File "D:\Anaconda\envs\fireredasr2s\lib\site-packages\numba\core\decorators.py", line 227 in wrapper
+  File "D:\Anaconda\envs\fireredasr2s\lib\site-packages\librosa\core\notation.py", line 1015 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1078 in _handle_fromlist
+  File "D:\Anaconda\envs\fireredasr2s\lib\site-packages\librosa\core\convert.py", line 6 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "D:\Anaconda\envs\fireredasr2s\lib\site-packages\librosa\filters.py", line 59 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "d:\Competition\FireRedASR2S\runtime_data\models\OpenVoice\openvoice\mel_processing.py", line 3 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "d:\Competition\FireRedASR2S\runtime_data\models\OpenVoice\openvoice\api.py", line 10 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 883 in exec_module
+  File "<frozen importlib._bootstrap>", line 688 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1006 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1027 in _find_and_load
+  File "d:\Competition\OpenVoiceRuntime\tmp_dump_import_stack.py", line 17 in <module>

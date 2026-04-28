@@ -22,4 +22,10 @@ if (-not $ffmpegCmd) {
 }
 
 Write-Host "OpenVoice uses the current conda Python by default. Set OPENVOICE_PYTHON only when you really need a separate interpreter." -ForegroundColor Yellow
-conda run -n fireredasr2s python -m web_demo.app
+$pythonExe = "D:\Anaconda\envs\fireredasr2s\python.exe"
+if (Test-Path $pythonExe) {
+    $env:PYTHONPATH = $projectRoot
+    & $pythonExe -m web_demo.app
+} else {
+    conda run -n fireredasr2s python -m web_demo.app
+}

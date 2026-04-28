@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import gradio as gr
@@ -76,6 +77,19 @@ def _resolve_route(tts: dict, route_name: str) -> dict:
     }
 
 
+def _prepare_preview_file(wav_path: str, trace_id: str, slot_name: str) -> str | None:
+    if not wav_path:
+        return None
+    src = Path(wav_path)
+    if not src.exists():
+        return None
+    preview_dir = Path("runtime_data") / "web_demo_preview" / (trace_id or "latest")
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    dst = preview_dir / f"{slot_name}{src.suffix.lower() or '.wav'}"
+    shutil.copy2(src, dst)
+    return str(dst.resolve())
+
+
 def process_audio(
     audio_path: str,
     speaker_ref_audio: str,
@@ -129,17 +143,29 @@ def process_audio(
     legacy_clone_audio = None
     legacy_clone_download_audio = None
     if teacher_route.get("wav_path") and Path(teacher_route["wav_path"]).exists():
-        teacher_path = Path(teacher_route["wav_path"])
-        teacher_audio = str(teacher_path)
-        teacher_download_audio = str(teacher_path)
+        teacher_preview = _prepare_preview_file(
+            teacher_route["wav_path"],
+            result.get("trace_id", ""),
+            "gold_teacher",
+        )
+        teacher_audio = teacher_preview
+        teacher_download_audio = teacher_preview
     if voice_matched_route.get("wav_path") and Path(voice_matched_route["wav_path"]).exists():
-        vm_path = Path(voice_matched_route["wav_path"])
-        voice_matched_audio = str(vm_path)
-        voice_matched_download_audio = str(vm_path)
+        vm_preview = _prepare_preview_file(
+            voice_matched_route["wav_path"],
+            result.get("trace_id", ""),
+            "voice_matched",
+        )
+        voice_matched_audio = vm_preview
+        voice_matched_download_audio = vm_preview
     if legacy_clone_route.get("wav_path") and Path(legacy_clone_route["wav_path"]).exists():
-        legacy_path = Path(legacy_clone_route["wav_path"])
-        legacy_clone_audio = str(legacy_path)
-        legacy_clone_download_audio = str(legacy_path)
+        legacy_preview = _prepare_preview_file(
+            legacy_clone_route["wav_path"],
+            result.get("trace_id", ""),
+            "legacy_text_clone",
+        )
+        legacy_clone_audio = legacy_preview
+        legacy_clone_download_audio = legacy_preview
     latencies = "\n".join(
         [
             f"ASR: {asr.get('latency_ms', 0)} ms",

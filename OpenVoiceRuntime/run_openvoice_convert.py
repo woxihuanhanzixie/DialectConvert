@@ -3,10 +3,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import types
 import sys
 import time
 from pathlib import Path
+
+
+def _log(stage: str) -> None:
+    sys.stderr.write(f"[openvoice] {stage}\n")
+    sys.stderr.flush()
 
 
 def _parse_args() -> argparse.Namespace:
@@ -52,6 +58,7 @@ def _load_embedding(cache_path: Path, device: str):
 def main() -> int:
     args = _parse_args()
     t0 = time.perf_counter()
+    _log("start")
     teacher_wav = Path(args.teacher_wav).resolve()
     ref_audio = Path(args.ref_audio).resolve()
     out_wav = Path(args.out_wav).resolve()
@@ -66,11 +73,24 @@ def main() -> int:
     if not converter_dir.exists():
         raise FileNotFoundError(f"Missing converter dir: {converter_dir}")
 
+    # Import the environment torch first so later sys.path changes won't pick up
+    # the vendored CPU-only torch package shipped with OpenVoice.
+    cuda_cache_dir = Path(__file__).resolve().parent / "cache" / "nvidia_compute"
+    cuda_cache_dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("CUDA_CACHE_PATH", str(cuda_cache_dir))
+    import torch
+
     vendor_dir = openvoice_repo / "_vendor"
-    if str(openvoice_repo) not in sys.path:
-        sys.path.append(str(openvoice_repo))
-    if vendor_dir.exists() and str(vendor_dir) not in sys.path:
-        sys.path.append(str(vendor_dir))
+    if vendor_dir.exists():
+        numba_cache_dir = Path(__file__).resolve().parent / "cache" / "numba"
+        numba_cache_dir.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("NUMBA_CACHE_DIR", str(numba_cache_dir))
+        if str(vendor_dir) in sys.path:
+            sys.path.remove(str(vendor_dir))
+        sys.path.insert(0, str(vendor_dir))
+    if str(openvoice_repo) in sys.path:
+        sys.path.remove(str(openvoice_repo))
+    sys.path.insert(0, str(openvoice_repo))
 
     class _DummyWatermarkModel:
         def to(self, _device):
@@ -86,10 +106,11 @@ def main() -> int:
     wavmark_stub.load_model = lambda: _DummyWatermarkModel()
     sys.modules["wavmark"] = wavmark_stub
 
-    import torch
+    _log("import_torch_and_openvoice")
     from openvoice.api import ToneColorConverter
 
     device = _resolve_device(args.device)
+    _log(f"resolved_device={device}")
     config_path = converter_dir / "config.json"
     checkpoint_path = converter_dir / "checkpoint.pth"
     if not config_path.exists():
@@ -103,19 +124,26 @@ def main() -> int:
     src_cache = cache_dir / f"src_{_file_sha1(teacher_wav)}.pth"
     tgt_cache = cache_dir / f"tgt_{_file_sha1(ref_audio)}.pth"
 
+    _log("init_converter")
     converter = ToneColorConverter(str(config_path), device=device)
     converter.watermark_model = None
+    _log("load_ckpt")
     converter.load_ckpt(str(checkpoint_path))
 
+    _log(f"load_or_extract_src={src_cache.name}")
     src_se = _load_embedding(src_cache, device)
     if src_se is None:
+        _log("extract_src")
         src_se = converter.extract_se(str(teacher_wav), se_save_path=str(src_cache))
 
+    _log(f"load_or_extract_tgt={tgt_cache.name}")
     tgt_se = _load_embedding(tgt_cache, device)
     if tgt_se is None:
+        _log("extract_tgt")
         tgt_se = converter.extract_se(str(ref_audio), se_save_path=str(tgt_cache))
 
     convert_t0 = time.perf_counter()
+    _log("convert")
     converter.convert(
         audio_src_path=str(teacher_wav),
         src_se=src_se,
@@ -123,6 +151,7 @@ def main() -> int:
         output_path=str(out_wav),
         message=args.message,
     )
+    _log("done")
     result = {
         "ok": True,
         "provider": "openvoice",
