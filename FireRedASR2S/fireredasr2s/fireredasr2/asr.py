@@ -1,4 +1,3 @@
-# Copyright 2026 Xiaohongshu. (Author: Kaituo Xu)
 
 import logging
 import os
@@ -22,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class FireRedAsr2Config:
-    use_gpu: bool = True
+    use_gpu: bool = True  #调用GPU训练
     use_half: bool = False
     beam_size: int = 3
     nbest: int = 1
@@ -68,7 +67,7 @@ class FireRedAsr2:
             elm = load_lstm_lm(model_path)
             elm.eval()
             logger.info(elm)
-        count_model_parameters(model)
+        count_model_parameters(model) 
         model.eval()
         return cls(asr_type, feat_extractor, model, tokenizer, elm, config)
 

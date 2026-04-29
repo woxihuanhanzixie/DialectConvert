@@ -130,7 +130,8 @@ def main():
         start = time.perf_counter()
         results = model.transcribe(batch_uttid, batch_wav_path)
         total_wall_time += time.perf_counter() - start
-        all_results.extend(results)
+        if results is not None:
+            all_results.extend(results)
 
     out_txt = args.out_prefix + ".txt"
     out_jsonl = args.out_prefix + ".jsonl"
