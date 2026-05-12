@@ -38,6 +38,10 @@ def _resolve_route(tts: dict, route_name: str) -> dict:
             "error": tts.get("baseline_error", ""),
             "input_text": tts.get("baseline_tts_input_text", ""),
             "input_mode": tts.get("baseline_tts_input_mode", ""),
+            "teacher_input_text": tts.get("teacher_input_text", "") or tts.get("baseline_tts_input_text", ""),
+            "teacher_input_mode": tts.get("teacher_input_mode", "") or tts.get("baseline_tts_input_mode", ""),
+            "teacher_style_instruction": tts.get("teacher_style_instruction", "") or tts.get("tts_style_instructions", ""),
+            "instruction_mode_active": tts.get("instruction_mode_active", False),
             "audio_meta": tts.get("baseline_audio_meta"),
             "voice_clone_enabled": False,
             "route_reason": "",
@@ -61,6 +65,10 @@ def _resolve_route(tts: dict, route_name: str) -> dict:
             "speaker_similarity_priority": "high",
             "tts_fluency_mode": "allow_rate_adjust",
             "route_reason": "",
+            "teacher_input_text": tts.get("teacher_input_text", ""),
+            "teacher_input_mode": "teacher_audio_to_audio",
+            "teacher_style_instruction": tts.get("teacher_style_instruction", "") or tts.get("tts_style_instructions", ""),
+            "instruction_mode_active": tts.get("instruction_mode_active", False),
         }
     return {"route_name": route_name}
 
@@ -76,6 +84,10 @@ def _prepare_preview_file(wav_path: str, trace_id: str, slot_name: str) -> str |
     dst = preview_dir / f"{slot_name}{src.suffix.lower() or '.wav'}"
     shutil.copy2(src, dst)
     return str(dst.resolve())
+
+
+def _yes_no(value: bool) -> str:
+    return "是" if value else "否"
 
 
 def process_audio(
@@ -119,6 +131,29 @@ def process_audio(
     voice_matched_route = _resolve_route(tts, "voice_matched")
     gap_summary = tts.get("gap_summary") or {}
     voice_match_summary = tts.get("voice_match_summary") or {}
+
+    teacher_input_text = (
+        tts.get("teacher_input_text")
+        or teacher_route.get("teacher_input_text")
+        or teacher_route.get("input_text")
+        or tts.get("tts_input_text")
+        or ""
+    )
+    teacher_input_mode = (
+        tts.get("teacher_input_mode")
+        or teacher_route.get("teacher_input_mode")
+        or teacher_route.get("input_mode")
+        or tts.get("tts_input_mode")
+        or ""
+    )
+    teacher_style_instruction = (
+        tts.get("teacher_style_instruction")
+        or teacher_route.get("teacher_style_instruction")
+        or tts.get("tts_style_instructions")
+        or ""
+    )
+    instruction_active = bool(tts.get("instruction_mode_active") or teacher_route.get("instruction_mode_active"))
+
     clone_ref_source = clone_ref_audio.get("source", "")
     if clone_ref_source == "input_audio_auto":
         clone_ref_label = "主音频自动复用"
@@ -126,28 +161,47 @@ def process_audio(
         clone_ref_label = "单独上传参考音频"
     else:
         clone_ref_label = "无"
-    json_panel = json.dumps(result, ensure_ascii=False, indent=2)
+
     teacher_audio = None
     teacher_download_audio = None
     voice_matched_audio = None
     voice_matched_download_audio = None
     if teacher_route.get("wav_path") and Path(teacher_route["wav_path"]).exists():
-        teacher_preview = _prepare_preview_file(
-            teacher_route["wav_path"],
-            result.get("trace_id", ""),
-            "gold_teacher",
-        )
+        teacher_preview = _prepare_preview_file(teacher_route["wav_path"], result.get("trace_id", ""), "gold_teacher")
         teacher_audio = teacher_preview
         teacher_download_audio = teacher_preview
     if voice_matched_route.get("wav_path") and Path(voice_matched_route["wav_path"]).exists():
-        vm_preview = _prepare_preview_file(
-            voice_matched_route["wav_path"],
-            result.get("trace_id", ""),
-            "voice_matched",
-        )
+        vm_preview = _prepare_preview_file(voice_matched_route["wav_path"], result.get("trace_id", ""), "voice_matched")
         voice_matched_audio = vm_preview
         voice_matched_download_audio = vm_preview
-    latencies = "\n".join(
+
+    quality_box = "\n".join(
+        [
+            f"输入语言: {result.get('input_lang', '未知')}",
+            f"目标方言: {rewrite.get('target_dialect') or target_dialect}",
+            f"方言风格: {rewrite.get('dialect_style') or dialect_style}",
+            f"Raw 质量分: {raw_audio.get('quality_score', '无')}",
+            f"Work 质量分: {work_audio.get('quality_score', '无')}",
+            f"风险标记: {', '.join(work_audio.get('quality_flags', [])) or '无'}",
+        ]
+    )
+    clone_box = "\n".join(
+        [
+            f"音色迁移启用: {_yes_no(bool(voice_matched_route.get('voice_clone_enabled')))}",
+            f"参考来源: {clone_ref_label}",
+            f"参考处理: {clone_ref_audio.get('frontend_mode') or '无'}",
+            f"拼接片段数: {ref_frontend.get('speech_segment_count', 0)}",
+            f"拼接后时长: {ref_frontend.get('concat_duration_s', '无')}",
+            f"Voice Matched Provider: {voice_match_summary.get('voice_match_provider') or voice_matched_route.get('voice_clone_provider') or '无'}",
+            f"音色优先级: {voice_matched_route.get('speaker_similarity_priority') or 'high'}",
+            f"流畅度模式: {voice_matched_route.get('tts_fluency_mode') or 'allow_rate_adjust'}",
+            f"推荐主输出: {tts.get('recommended_main_output') or 'gold_teacher'}",
+            f"推荐策略: {voice_match_summary.get('recommendation_reason') or gap_summary.get('recommended_strategy') or '无'}",
+            f"Voice Matched 说明: {voice_matched_route.get('speaker_similarity_note') or '无'}",
+            f"Voice Matched 回退: {voice_matched_route.get('fallback_reason') or voice_match_summary.get('voice_match_error') or '无'}",
+        ]
+    )
+    latency_box = "\n".join(
         [
             f"ASR: {asr.get('latency_ms', 0)} ms",
             f"Review: {review.get('review_latency_ms', 0)} ms",
@@ -158,52 +212,46 @@ def process_audio(
             f"Total: {result.get('total_latency_ms', 0)} ms",
         ]
     )
-    quality_box = "\n".join(
-        [
-            f"输入语言: {result.get('input_lang', '未知')}",
-            f"目标方言: {rewrite.get('target_dialect') or 'yue'}",
-            f"方言风格: {rewrite.get('dialect_style') or 'guangdong_general'}",
-            f"Raw 质量分: {raw_audio.get('quality_score', '无')}",
-            f"Work 质量分: {work_audio.get('quality_score', '无')}",
-            f"风险标记: {', '.join(work_audio.get('quality_flags', [])) or '无'}",
-        ]
-    )
-    clone_box = "\n".join(
-        [
-            f"音色转换启用: {'是' if voice_matched_route.get('voice_clone_enabled') else '否'}",
-            f"参考来源: {clone_ref_label}",
-            f"参考处理: {clone_ref_audio.get('frontend_mode') or '无'}",
-            f"拼接片段数: {ref_frontend.get('speech_segment_count', 0)}",
-            f"拼接后时长: {ref_frontend.get('concat_duration_s', '无')}",
-            f"Voice Matched Provider: {voice_match_summary.get('voice_match_provider') or voice_matched_route.get('voice_clone_provider') or '无'}",
-            f"音色优先级: {voice_matched_route.get('speaker_similarity_priority') or 'high'}",
-            f"流畅度模式: {voice_matched_route.get('tts_fluency_mode') or 'allow_rate_adjust'}",
-            f"Gold Teacher 输入模式: {teacher_route.get('input_mode') or '未知'}",
-            f"Voice Matched 输入模式: {voice_matched_route.get('input_mode') or '未知'}",
-            f"推荐主输出: {tts.get('recommended_main_output') or 'gold_teacher'}",
-            f"推荐策略: {voice_match_summary.get('recommendation_reason') or gap_summary.get('recommended_strategy') or '无'}",
-            f"Voice Matched 说明: {voice_matched_route.get('speaker_similarity_note') or '无'}",
-            f"Voice Matched 回退: {voice_matched_route.get('fallback_reason') or voice_match_summary.get('voice_match_error') or '无'}",
-        ]
-    )
     pron_box = "\n".join(
         [
             f"发音模式: {rewrite.get('pronunciation_mode') or 'rule_first'}",
-            f"规则命中数: {len(rewrite.get('pronunciation_rule_hits') or [])}",
+            f"发音规则命中数: {len(rewrite.get('pronunciation_rule_hits') or [])}",
             f"发音命中类别: {', '.join(rewrite.get('pronunciation_hit_categories') or []) or '无'}",
-            f"是否触发 LLM 回退: {'是' if rewrite.get('pronunciation_fallback_used') else '否'}",
+            f"发音 LLM fallback: {_yes_no(bool(rewrite.get('pronunciation_fallback_used')))}",
             f"发音说明: {rewrite.get('pronunciation_notes') or '无'}",
             f"韵律模式: {rewrite.get('prosody_mode') or 'rule_plus_llm'}",
-            f"韵律规则命中: {len(rewrite.get('prosody_rule_hits') or [])}",
+            f"韵律规则命中数: {len(rewrite.get('prosody_rule_hits') or [])}",
             f"韵律命中类别: {', '.join(rewrite.get('prosody_hit_categories') or []) or '无'}",
-            f"韵律回退: {'是' if rewrite.get('prosody_fallback_used') else '否'}",
+            f"韵律 fallback: {_yes_no(bool(rewrite.get('prosody_fallback_used')))}",
         ]
     )
-    recommendation_md = build_recommendation_markdown(result)
-    text_compare_md = build_text_compare_markdown(result)
-    gap_summary_md = build_gap_summary_markdown(result)
+    teacher_instruction_status = "\n".join(
+        [
+            f"Teacher input mode: {teacher_input_mode or 'unknown'}",
+            f"Instruction parameter active: {_yes_no(instruction_active)}",
+        ]
+    )
+    error_box = (voice_matched_route.get("error") or "") + (
+        f"\nGold Teacher 错误: {teacher_route.get('error')}" if teacher_route.get("error") else ""
+    )
     teacher_card_md, voice_matched_card_md = build_route_cards_markdown(result)
     return (
+        teacher_input_text,
+        teacher_style_instruction,
+        teacher_instruction_status,
+        quality_box,
+        clone_box,
+        latency_box,
+        error_box,
+        teacher_audio,
+        teacher_download_audio,
+        voice_matched_audio,
+        voice_matched_download_audio,
+        build_recommendation_markdown(result),
+        teacher_card_md,
+        voice_matched_card_md,
+        build_text_compare_markdown(result),
+        build_gap_summary_markdown(result),
         asr.get("punc_text") or asr.get("text") or "",
         review.get("asr_reviewed_text") or "",
         rewrite.get("tn_text") or "",
@@ -211,24 +259,9 @@ def process_audio(
         rewrite.get("semantic_text") or rewrite.get("dialect_text") or "",
         rewrite.get("pronunciation_text") or "",
         rewrite.get("prosody_text") or "",
-        quality_box,
         pron_box,
-        clone_box,
-        latencies,
-        (voice_matched_route.get("error") or "")
-        + (f"\nGold Teacher 错误: {teacher_route.get('error')}" if teacher_route.get("error") else "")
-        ,
-        teacher_audio,
-        teacher_download_audio,
-        voice_matched_audio,
-        voice_matched_download_audio,
-        recommendation_md,
-        teacher_card_md,
-        voice_matched_card_md,
-        text_compare_md,
-        gap_summary_md,
         human_review_markdown(result),
-        json_panel,
+        json.dumps(result, ensure_ascii=False, indent=2),
     )
 
 
@@ -238,11 +271,11 @@ def load_eval_panel():
     stats_md = "\n".join(
         [
             "### 现有样本评估",
-            f"- 样本数：{stats['total']}",
-            f"- TTS 成功：{stats['tts_ok']}",
-            f"- TTS 失败：{stats['tts_failed']}",
-            f"- 平均改写耗时：{stats['avg_rewrite_latency_ms']} ms",
-            f"- 平均 TTS 耗时：{stats['avg_tts_latency_ms']} ms",
+            f"- 样本数: {stats['total']}",
+            f"- TTS 成功: {stats['tts_ok']}",
+            f"- TTS 失败: {stats['tts_failed']}",
+            f"- 平均改写耗时: {stats['avg_rewrite_latency_ms']} ms",
+            f"- 平均 TTS 耗时: {stats['avg_tts_latency_ms']} ms",
         ]
     )
     return stats_md, build_eval_table(rows)
@@ -250,45 +283,36 @@ def load_eval_panel():
 
 def build_demo() -> gr.Blocks:
     caps = get_demo_capabilities()
-    with gr.Blocks(title="Demo1 多方言语音演示") as demo:
-        gr.Markdown("# Demo1 多方言语音网页演示")
+    with gr.Blocks(title="Demo1 teacher-first 方言音色演示") as demo:
+        gr.Markdown("# Demo1 Teacher-First 方言音色演示")
         gr.Markdown(
-            f"当前支持上传格式：`{', '.join(caps['supported_upload_exts'])}`  \n"
-            f"FFmpeg 可用：`{caps['ffmpeg_available']}`  \n"
+            f"当前支持上传格式: `{', '.join(caps['supported_upload_exts'])}`  \n"
+            f"FFmpeg 可用: `{caps['ffmpeg_available']}`  \n"
             f"{caps['microphone_hint']}"
         )
         with gr.Tabs():
             with gr.Tab("完整演示页"):
                 with gr.Row():
                     with gr.Column(scale=1):
-                        input_audio = gr.Audio(
-                            sources=["upload", "microphone"],
-                            type="filepath",
-                            label="上传或直接录音",
-                        )
+                        input_audio = gr.Audio(sources=["upload", "microphone"], type="filepath", label="上传或直接录音")
                         speaker_ref_audio = gr.Audio(
                             sources=["upload", "microphone"],
                             type="filepath",
                             label="音色参考音频（用于 Voice Matched，可选）",
                         )
-                        gr.Markdown("高级预留：后续会增加 `Prosody Ref` 双参考模式，首版默认不启用。")
                         enable_punc = gr.Checkbox(value=True, label="启用标点增强")
                         enable_tts = gr.Checkbox(value=True, label="启用 TTS")
                         voice_clone_enabled = gr.Checkbox(value=False, label="启用 Voice Matched")
                         voice_clone_provider = gr.Dropdown(
                             choices=["none", "rvc", "openvoice", "gpt_sovits", "fish_speech", "qwen_vc"],
                             value="openvoice",
-                            label="音色转换 Provider",
+                            label="音色迁移 Provider",
                         )
-                        voice = gr.Dropdown(choices=["Kiki", "Rocky"], value="Kiki", label="方言音色")
-                        target_dialect = gr.Dropdown(
-                            choices=list(DIALECT_CHOICES),
-                            value="粤语",
-                            label="目标方言",
-                        )
+                        voice = gr.Dropdown(choices=["Kiki", "Rocky"], value="Kiki", label="Qwen 系统音色")
+                        target_dialect = gr.Dropdown(choices=list(DIALECT_CHOICES), value="粤语", label="目标方言")
                         segment_max_len = gr.Slider(16, 48, value=28, step=1, label="分段长度")
                         run_btn = gr.Button("开始转换", variant="primary")
-                    with gr.Column(scale=1):
+                    with gr.Column(scale=2):
                         recommendation_md = gr.Markdown(label="试听建议")
                         with gr.Row():
                             with gr.Column():
@@ -299,24 +323,29 @@ def build_demo() -> gr.Blocks:
                                 voice_matched_audio = gr.Audio(label="Voice Matched 音频")
                                 voice_matched_download_audio = gr.File(label="下载 Voice Matched 音频")
                                 voice_matched_card_md = gr.Markdown()
-                        text_compare_md = gr.Markdown()
+                        teacher_input_text = gr.Textbox(label="Qwen TTS teacher 输入文本", lines=4)
+                        teacher_style_instruction = gr.Textbox(label="方言 style instruction", lines=4)
+                        teacher_instruction_status = gr.Textbox(label="Teacher 控制状态", lines=2)
                         gap_summary_md = gr.Markdown()
                     with gr.Column(scale=1):
-                        asr_text = gr.Textbox(label="ASR 原始文本", lines=3)
-                        reviewed_text = gr.Textbox(label="审查后文本", lines=3)
-                        tn_text = gr.Textbox(label="Rewrite 前文本", lines=3)
-                        pivot_text = gr.Textbox(label="Pivot 中文", lines=3)
-                        yue_text = gr.Textbox(label="语义转写文本", lines=4)
-                        pronunciation_text = gr.Textbox(label="发音转写文本", lines=4)
-                        prosody_text = gr.Textbox(label="韵律润色文本", lines=4)
-                        quality_box = gr.Textbox(label="输入质量与语言", lines=4)
-                        pron_box = gr.Textbox(label="发音/韵律修正状态", lines=6)
-                        clone_box = gr.Textbox(label="音色克隆状态", lines=5)
-                        latency_box = gr.Textbox(label="耗时统计", lines=5)
+                        quality_box = gr.Textbox(label="输入质量与语言", lines=5)
+                        clone_box = gr.Textbox(label="音色迁移状态", lines=9)
+                        latency_box = gr.Textbox(label="耗时统计", lines=7)
                         error_box = gr.Textbox(label="错误/降级提示", lines=4)
+                        with gr.Accordion("调试文本与规则命中（不作为最终业务结果）", open=False):
+                            asr_text = gr.Textbox(label="ASR 原始文本", lines=3)
+                            reviewed_text = gr.Textbox(label="审查后文本", lines=3)
+                            tn_text = gr.Textbox(label="Rewrite 前文本", lines=3)
+                            pivot_text = gr.Textbox(label="Pivot 中文", lines=3)
+                            semantic_text = gr.Textbox(label="语义/方言控制文本", lines=4)
+                            pronunciation_text = gr.Textbox(label="发音控制文本", lines=4)
+                            prosody_text = gr.Textbox(label="韵律控制文本", lines=4)
+                            pron_box = gr.Textbox(label="发音/韵律规则状态", lines=9)
+                            text_compare_md = gr.Markdown()
                     with gr.Column(scale=1):
-                        review_md = gr.Markdown()
-                        json_panel = gr.Code(label="结构化结果", language="json")
+                        with gr.Accordion("完整调试报告与 JSON", open=False):
+                            review_md = gr.Markdown()
+                            json_panel = gr.Code(label="结构化结果", language="json")
 
                 run_btn.click(
                     process_audio,
@@ -332,15 +361,10 @@ def build_demo() -> gr.Blocks:
                         voice_clone_provider,
                     ],
                     outputs=[
-                        asr_text,
-                        reviewed_text,
-                        tn_text,
-                        pivot_text,
-                        yue_text,
-                        pronunciation_text,
-                        prosody_text,
+                        teacher_input_text,
+                        teacher_style_instruction,
+                        teacher_instruction_status,
                         quality_box,
-                        pron_box,
                         clone_box,
                         latency_box,
                         error_box,
@@ -353,6 +377,14 @@ def build_demo() -> gr.Blocks:
                         voice_matched_card_md,
                         text_compare_md,
                         gap_summary_md,
+                        asr_text,
+                        reviewed_text,
+                        tn_text,
+                        pivot_text,
+                        semantic_text,
+                        pronunciation_text,
+                        prosody_text,
+                        pron_box,
                         review_md,
                         json_panel,
                     ],

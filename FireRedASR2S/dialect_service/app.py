@@ -69,6 +69,7 @@ def rewrite(req: RewriteRequest) -> RewriteResponse:
 @app.post("/api/v1/dialect/tts", response_model=TtsResponse)
 def tts(req: TtsRequest) -> TtsResponse:
     engine = get_pipeline_engine()
+    dialect_style = _validate_dialect(req.target_dialect, req.dialect_style)
     engine.cfg.qwen_tts_model = req.model
     engine.cfg.qwen_tts_voice = req.voice
     engine.cfg.qwen_tts_language_type = req.language_type
@@ -81,6 +82,8 @@ def tts(req: TtsRequest) -> TtsResponse:
         voice=req.voice,
         voice_clone_enabled=req.voice_clone_enabled,
         speaker_ref_audio=req.speaker_ref_audio,
+        target_dialect=req.target_dialect,
+        dialect_style=dialect_style,
     )
     return TtsResponse(**result["tts"])
 

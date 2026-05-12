@@ -18,6 +18,8 @@ def synthesize_standard_tts(text: str, out_wav: Path, cfg: Step2Config) -> dict[
             "audio_url": "",
             "expires_at": "",
             "error": "Missing QWEN_TTS_API_KEY or DASHSCOPE_API_KEY",
+            "instruction_mode_active": False,
+            "tts_style_instructions": cfg.tts_style_instructions,
         }
 
     payload = {
@@ -154,6 +156,7 @@ def synthesize_gold_teacher(text: str, out_wav: Path, cfg: Step2Config) -> dict[
     result = synthesize_standard_tts(text, out_wav, cfg)
     result["teacher_role"] = "gold_standard_pronunciation"
     result["teacher_input_text"] = text
+    result["teacher_style_instruction"] = cfg.tts_style_instructions
     result["teacher_wav_path"] = result.get("wav_path", "")
     return result
 
