@@ -1,0 +1,2 @@
+local_url=http://localhost:7862/
+share_url=https://26fbdf044d5321cab2.gradio.live

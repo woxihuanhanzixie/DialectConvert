@@ -1,0 +1,16 @@
+[Unit]
+Description=Demo1 Dialect Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/Competition/FireRedASR2S
+EnvironmentFile=/etc/voice-demo/dialect_service.env
+ExecStart=/usr/bin/bash /opt/Competition/FireRedASR2S/scripts/start_dialect_service_prod.sh
+Restart=always
+RestartSec=5
+User=voice-demo
+Group=voice-demo
+
+[Install]
+WantedBy=multi-user.target

@@ -10,22 +10,30 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 import re
+
+import soundfile as sf
 
 from .config import Step2Config
 
 
 def create_qwen_voice(ref_audio_path: str | Path, cfg: Step2Config, preferred_name: str) -> dict[str, Any]:
+    validation = _validate_reference_audio(ref_audio_path, cfg)
+    cached = _load_qwen_voice_cache(ref_audio_path, cfg, validation=validation)
+    if cached:
+        return {**cached, "raw": cached.get("raw", {}), "cache_hit": True, "reference_audio_validation": validation}
+
     ref_path = Path(ref_audio_path)
     mime_type = mimetypes.guess_type(ref_path.name)[0] or "audio/wav"
     data_uri = f"data:{mime_type};base64,{base64.b64encode(ref_path.read_bytes()).decode()}"
     payload = {
-        "model": "qwen-voice-enrollment",
+        "model": cfg.qwen_voice_enrollment_model,
         "input": {
             "action": "create",
-            "target_model": cfg.qwen_tts_vc_model,
+            "target_model": cfg.qwen_voice_target_model,
             "preferred_name": _sanitize_preferred_name(preferred_name),
             "audio": {"data": data_uri},
         },
@@ -34,12 +42,21 @@ def create_qwen_voice(ref_audio_path: str | Path, cfg: Step2Config, preferred_na
     voice = raw.get("output", {}).get("voice", "")
     if not voice:
         raise RuntimeError(f"Missing output.voice in qwen voice enrollment response: {json.dumps(raw, ensure_ascii=False)[:500]}")
-    return {"voice": voice, "raw": raw}
+    result = {
+        "voice": voice,
+        "raw": raw,
+        "cache_hit": False,
+        "target_model": cfg.qwen_voice_target_model,
+        "enrollment_model": cfg.qwen_voice_enrollment_model,
+        "reference_audio_validation": validation,
+    }
+    _save_qwen_voice_cache(ref_audio_path, cfg, result, validation=validation)
+    return result
 
 
 def synthesize_qwen_vc(text: str, voice: str, out_wav: Path, cfg: Step2Config) -> dict[str, Any]:
     payload = {
-        "model": cfg.qwen_tts_vc_model,
+        "model": cfg.qwen_voice_target_model,
         "input": {
             "text": text,
             "voice": voice,
@@ -58,6 +75,7 @@ def synthesize_qwen_vc(text: str, voice: str, out_wav: Path, cfg: Step2Config) -
         "audio_url": audio_url,
         "expires_at": expires_at,
         "voice": voice,
+        "model": cfg.qwen_voice_target_model,
     }
 
 
@@ -72,10 +90,22 @@ def convert_voice_from_teacher(
     cfg: Step2Config,
     *,
     preferred_name: str,
+    input_text: str = "",
 ) -> dict[str, Any]:
-    provider = (cfg.voice_conversion_provider or "none").strip()
+    provider = (cfg.voice_conversion_provider or "none").strip().lower()
     teacher_path = Path(teacher_wav_path)
     ref_path = Path(ref_audio_path)
+    if provider in {"qwen_voice_clone", "qwen_vc", "qwen"}:
+        return {
+            "ok": False,
+            "wav_path": "",
+            "provider": "qwen_voice_clone",
+            "error": "Qwen voice clone is text-to-speech cloning, not teacher audio-to-audio conversion.",
+            "fallback_reason": "qwen_text_clone_not_teacher_audio_to_audio",
+            "teacher_wav_path": str(teacher_path),
+            "reference_wav_path": str(ref_path),
+            "model": cfg.qwen_voice_target_model,
+        }
     if not teacher_path.exists():
         return {
             "ok": False,
@@ -307,6 +337,72 @@ def _convert_with_openvoice_subprocess(
     }
 
 
+def _convert_with_qwen_voice_clone(
+    input_text: str,
+    ref_path: Path,
+    out_wav: Path,
+    cfg: Step2Config,
+    *,
+    preferred_name: str,
+    teacher_path: Path,
+) -> dict[str, Any]:
+    if not cfg.qwen_tts_api_key:
+        return {
+            "ok": False,
+            "wav_path": "",
+            "provider": "qwen_voice_clone",
+            "error": "Missing QWEN_TTS_API_KEY or DASHSCOPE_API_KEY",
+            "fallback_reason": "missing_qwen_tts_api_key",
+            "teacher_wav_path": str(teacher_path),
+            "reference_wav_path": str(ref_path),
+            "model": cfg.qwen_voice_target_model,
+        }
+    if not ref_path.exists():
+        return {
+            "ok": False,
+            "wav_path": "",
+            "provider": "qwen_voice_clone",
+            "error": f"Missing reference audio: {ref_path}",
+            "fallback_reason": "missing_reference_audio",
+            "teacher_wav_path": str(teacher_path),
+            "reference_wav_path": str(ref_path),
+            "model": cfg.qwen_voice_target_model,
+        }
+    try:
+        voice_info = create_qwen_voice(ref_path, cfg, preferred_name=preferred_name)
+        result = synthesize_qwen_vc(input_text, voice_info["voice"], out_wav, cfg)
+        return {
+            "ok": True,
+            "wav_path": result.get("wav_path", str(out_wav)),
+            "provider": "qwen_voice_clone",
+            "audio_url": result.get("audio_url", ""),
+            "expires_at": result.get("expires_at", ""),
+            "error": "",
+            "fallback_reason": "",
+            "teacher_wav_path": str(teacher_path),
+            "reference_wav_path": str(ref_path),
+            "model": cfg.qwen_voice_target_model,
+            "voice": result.get("voice") or voice_info.get("voice", ""),
+            "target_model": cfg.qwen_voice_target_model,
+            "enrollment_model": cfg.qwen_voice_enrollment_model,
+            "voice_cache_hit": bool(voice_info.get("cache_hit")),
+            "reference_audio_validation": voice_info.get("reference_audio_validation", {}),
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "wav_path": "",
+            "provider": "qwen_voice_clone",
+            "error": str(exc),
+            "fallback_reason": "qwen_voice_clone_failed",
+            "teacher_wav_path": str(teacher_path),
+            "reference_wav_path": str(ref_path),
+            "model": cfg.qwen_voice_target_model,
+            "target_model": cfg.qwen_voice_target_model,
+            "enrollment_model": cfg.qwen_voice_enrollment_model,
+        }
+
+
 def _convert_with_rvc_subprocess(
     teacher_path: Path,
     ref_path: Path,
@@ -489,6 +585,112 @@ def _post_json(url: str, payload: dict[str, Any], api_key: str, timeout_s: int) 
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="ignore")
         raise RuntimeError(f"HTTP {e.code}: {body}") from e
+
+
+def _validate_reference_audio(ref_audio_path: str | Path, cfg: Step2Config) -> dict[str, Any]:
+    ref_path = Path(ref_audio_path)
+    if not ref_path.exists():
+        raise RuntimeError(f"Missing reference audio: {ref_path}")
+    if not ref_path.is_file():
+        raise RuntimeError(f"Reference audio is not a file: {ref_path}")
+
+    suffix = ref_path.suffix.lower()
+    allowed_exts = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".webm", ".flac"}
+    if suffix not in allowed_exts:
+        raise RuntimeError(f"Unsupported reference audio extension: {suffix or '(none)'}")
+
+    size_bytes = ref_path.stat().st_size
+    if size_bytes <= 0:
+        raise RuntimeError("Reference audio is empty.")
+
+    try:
+        info = sf.info(str(ref_path))
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"Cannot inspect reference audio: {exc}") from exc
+
+    duration_s = float(info.duration)
+    if duration_s < cfg.speaker_ref_audio_min_s:
+        raise RuntimeError(
+            f"Reference audio is too short: {duration_s:.2f}s, "
+            f"minimum is {cfg.speaker_ref_audio_min_s:.2f}s."
+        )
+    if duration_s > cfg.speaker_ref_audio_max_s:
+        raise RuntimeError(
+            f"Reference audio is too long: {duration_s:.2f}s, "
+            f"maximum is {cfg.speaker_ref_audio_max_s:.2f}s."
+        )
+
+    return {
+        "path": str(ref_path),
+        "size_bytes": size_bytes,
+        "duration_s": round(duration_s, 3),
+        "sample_rate": info.samplerate,
+        "channels": info.channels,
+        "format": info.format,
+        "subtype": info.subtype,
+    }
+
+
+def _audio_cache_key(ref_audio_path: str | Path, cfg: Step2Config) -> str:
+    ref_path = Path(ref_audio_path)
+    h = hashlib.sha256()
+    h.update(ref_path.read_bytes())
+    h.update(cfg.qwen_voice_target_model.encode("utf-8"))
+    h.update(cfg.qwen_voice_enrollment_model.encode("utf-8"))
+    return h.hexdigest()
+
+
+def _voice_cache_path(ref_audio_path: str | Path, cfg: Step2Config) -> Path:
+    return cfg.qwen_voice_cache_dir / f"{_audio_cache_key(ref_audio_path, cfg)}.json"
+
+
+def _load_qwen_voice_cache(ref_audio_path: str | Path, cfg: Step2Config, *, validation: dict[str, Any]) -> dict[str, Any] | None:
+    cache_path = _voice_cache_path(ref_audio_path, cfg)
+    if not cache_path.exists():
+        return None
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if payload.get("target_model") != cfg.qwen_voice_target_model:
+        return None
+    if payload.get("enrollment_model") != cfg.qwen_voice_enrollment_model:
+        return None
+    voice = str(payload.get("voice") or "")
+    if not voice:
+        return None
+    return {
+        "voice": voice,
+        "target_model": payload.get("target_model", ""),
+        "enrollment_model": payload.get("enrollment_model", ""),
+        "created_at": payload.get("created_at", ""),
+        "cache_path": str(cache_path),
+        "reference_audio_validation": validation,
+    }
+
+
+def _save_qwen_voice_cache(
+    ref_audio_path: str | Path,
+    cfg: Step2Config,
+    result: dict[str, Any],
+    *,
+    validation: dict[str, Any],
+) -> None:
+    voice = str(result.get("voice") or "")
+    if not voice:
+        return
+    cache_path = _voice_cache_path(ref_audio_path, cfg)
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "voice": voice,
+        "target_model": cfg.qwen_voice_target_model,
+        "enrollment_model": cfg.qwen_voice_enrollment_model,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "reference_audio_sha256": _audio_cache_key(ref_audio_path, cfg),
+        "reference_audio": validation,
+        "status": "active",
+    }
+    cache_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _sanitize_preferred_name(name: str) -> str:

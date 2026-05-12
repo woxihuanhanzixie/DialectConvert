@@ -23,6 +23,7 @@ dependencies = [
     "uvicorn>=0.30",
     "python-multipart>=0.0.9",
     "gradio>=5.0",
+    "dashscope>=1.25.17",
 ]
 
 [project.scripts]
