@@ -9,6 +9,7 @@ import gradio as gr
 
 from .client import get_demo_capabilities, load_eval_rows, run_pipeline_from_audio
 from .view_models import (
+    build_cultural_cards_markdown,
     build_eval_table,
     build_gap_summary_markdown,
     build_recommendation_markdown,
@@ -224,6 +225,7 @@ def process_audio(
     text_compare_md = build_text_compare_markdown(result)
     gap_summary_md = build_gap_summary_markdown(result)
     teacher_card_md, voice_matched_card_md = build_route_cards_markdown(result)
+    cultural_cards_md = build_cultural_cards_markdown(result)
     error_text = (voice_matched_route.get("error") or "") + (
         f"\nGold Teacher 错误: {teacher_route.get('error')}" if teacher_route.get("error") else ""
     )
@@ -237,6 +239,7 @@ def process_audio(
         rewrite.get("tn_text") or "",
         result.get("pivot_text_zh") or rewrite.get("pivot_text_zh") or "",
         rewrite.get("prosody_text") or rewrite.get("pronunciation_text") or rewrite.get("dialect_text") or rewrite.get("semantic_text") or "",
+        cultural_cards_md,
         rewrite.get("pronunciation_text") or "",
         rewrite.get("prosody_text") or "",
         quality_box,
@@ -349,6 +352,7 @@ def build_demo() -> gr.Blocks:
                         tn_text = gr.Textbox(label="Rewrite 前文本", lines=3)
                         pivot_text = gr.Textbox(label="Pivot 中文", lines=3)
                         yue_text = gr.Textbox(label="方言发声文本（参与 Gold Teacher）", lines=4)
+                        cultural_cards_md = gr.Markdown()
                         pronunciation_text = gr.Textbox(label="发音转写文本", lines=4)
                         prosody_text = gr.Textbox(label="韵律润色文本", lines=4)
                         quality_box = gr.Textbox(label="输入质量与语音识别", lines=6)
@@ -382,6 +386,7 @@ def build_demo() -> gr.Blocks:
                         tn_text,
                         pivot_text,
                         yue_text,
+                        cultural_cards_md,
                         pronunciation_text,
                         prosody_text,
                         quality_box,

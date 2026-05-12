@@ -28,6 +28,20 @@ class RewriteRequest(BaseModel):
     segment_max_len: int = 28
 
 
+class CulturalKnowledgeCardResponse(BaseModel):
+    id: str
+    target_dialect: str
+    term: str
+    aliases: list[str] = Field(default_factory=list)
+    matched_terms: list[str] = Field(default_factory=list)
+    meaning: str = ""
+    cultural_note: str = ""
+    usage_example: str = ""
+    speech_register: str = Field(default="", alias="register")
+    source_label: str = ""
+    source_url: str = ""
+
+
 class RewriteResponse(BaseModel):
     source_text: str
     tn_text: str
@@ -46,6 +60,8 @@ class RewriteResponse(BaseModel):
     prosody_hit_categories: list[str] = Field(default_factory=list)
     prosody_fallback_used: bool = False
     prosody_notes: str = ""
+    cultural_cards: list[CulturalKnowledgeCardResponse] = Field(default_factory=list)
+    cultural_card_terms: list[str] = Field(default_factory=list)
     degrade_mode: bool
     llm_model: str
     llm_latency_ms: float

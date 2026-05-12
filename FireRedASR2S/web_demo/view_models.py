@@ -107,6 +107,59 @@ def _escape_markdown_cell(value: Any) -> str:
     return str(value).replace("|", "\\|").replace("\n", "<br>")
 
 
+def _escape_html(value: Any) -> str:
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _highlight_terms(text: str, terms: list[str]) -> str:
+    highlighted = _escape_html(text)
+    for term in sorted({term for term in terms if term}, key=len, reverse=True):
+        safe_term = _escape_html(term)
+        highlighted = highlighted.replace(safe_term, f"<mark>{safe_term}</mark>")
+    return highlighted
+
+
+def build_cultural_cards_markdown(result: dict[str, Any]) -> str:
+    rewrite = result.get("rewrite") or {}
+    cards = rewrite.get("cultural_cards") or []
+    if not cards:
+        return "### 文化百科卡片\n暂无命中文化百科卡片。"
+    matched_terms: list[str] = []
+    for card in cards:
+        matched_terms.extend(card.get("matched_terms") or [card.get("term", "")])
+    terms = rewrite.get("cultural_card_terms") or [card.get("term", "") for card in cards]
+    semantic_text = rewrite.get("semantic_text") or rewrite.get("dialect_text") or ""
+    lines = [
+        "### 文化百科卡片",
+        f"命中片段：{_highlight_terms(semantic_text, matched_terms)}",
+        " ".join(f"<mark>{_escape_html(term)}</mark>" for term in terms if term),
+    ]
+    for card in cards:
+        matched_terms = "、".join(card.get("matched_terms") or [])
+        source_label = card.get("source_label") or "资料整理"
+        source_url = card.get("source_url") or ""
+        source = f"[{source_label}]({source_url})" if source_url else source_label
+        lines.extend(
+            [
+                "",
+                f"**{card.get('term') or '方言词'}**",
+                f"- 命中：{matched_terms or card.get('term') or '无'}",
+                f"- 词义：{card.get('meaning') or '无'}",
+                f"- 文化说明：{card.get('cultural_note') or '无'}",
+                f"- 例句：{card.get('usage_example') or '无'}",
+                f"- 语体：{card.get('register') or '无'}",
+                f"- 来源：{source}",
+            ]
+        )
+    return "\n".join(lines)
+
+
 def build_recommendation_markdown(result: dict[str, Any]) -> str:
     tts = result.get("tts") or {}
     gap_summary = tts.get("gap_summary") or {}
