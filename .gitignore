@@ -31,6 +31,7 @@ build/
 dist/
 *.egg-info/
 *.tar.gz
+tools/
 
 ## Project runtime/model artifacts
 FireRedASR2S/pretrained_models/

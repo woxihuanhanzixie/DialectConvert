@@ -20,6 +20,34 @@ TARGET_CHANNELS = 1
 SUPPORTED_EXTS = {".wav", ".mp3", ".m4a", ".webm", ".flac", ".aac", ".amr", ".3gp", ".ogg", ".opus"}
 
 
+def find_ffmpeg() -> str:
+    configured = os.getenv("FFMPEG_BINARY", "").strip()
+    if configured and Path(configured).is_file():
+        return str(Path(configured).resolve())
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        return ffmpeg
+
+    project_root = Path(__file__).resolve().parents[1]
+    workspace_root = project_root.parent
+    search_roots = [
+        workspace_root / "tools" / "ffmpeg",
+        project_root / "tools" / "ffmpeg",
+        workspace_root / "ffmpeg",
+    ]
+    for root in search_roots:
+        if not root.exists():
+            continue
+        direct = root / "bin" / "ffmpeg.exe"
+        if direct.is_file():
+            return str(direct.resolve())
+        for candidate in root.glob("*/bin/ffmpeg.exe"):
+            if candidate.is_file():
+                return str(candidate.resolve())
+    return ""
+
+
 class AudioNormalizeError(RuntimeError):
     def __init__(self, message: str, error_code: str = "AUDIO_CONVERT_FAILED", details: dict[str, Any] | None = None):
         super().__init__(message)
@@ -31,7 +59,7 @@ class AudioNormalizeError(RuntimeError):
 
 
 def get_runtime_capabilities() -> dict[str, Any]:
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = find_ffmpeg()
     return {
         "ffmpeg_available": bool(ffmpeg),
         "ffmpeg_path": ffmpeg or "",
@@ -152,7 +180,7 @@ def _resample(data: np.ndarray, src_sr: int, dst_sr: int) -> np.ndarray:
 
 
 def _convert_to_model_wav(src: Path, raw_pcm_path: Path) -> dict[str, Any]:
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = find_ffmpeg()
     if ffmpeg:
         cmd = [
             ffmpeg,
