@@ -8,6 +8,7 @@ import urllib.request
 from typing import Any
 
 from fireredasr2s.dialect_pipeline.config import Step2Config
+from fireredasr2s.dialect_pipeline.cultural_cards import cultural_card_terms, match_cultural_cards
 from fireredasr2s.dialect_pipeline.dialects import dialect_label, normalize_dialect_style
 from fireredasr2s.dialect_pipeline.pronunciation import build_pronunciation_text
 from fireredasr2s.dialect_pipeline.prosody import build_prosody_text
@@ -164,6 +165,7 @@ def rewrite_text(
         target_dialect=target_dialect,
         dialect_style=dialect_style,
     )
+    cultural_cards = match_cultural_cards(semantic_text, target_dialect=target_dialect)
     return {
         "source_text": text,
         "tn_text": rewrite_input_text,
@@ -182,6 +184,8 @@ def rewrite_text(
         "prosody_rule_hits": prosody["prosody_rule_hits"],
         "prosody_fallback_used": prosody["prosody_fallback_used"],
         "prosody_notes": prosody["prosody_notes"],
+        "cultural_cards": cultural_cards,
+        "cultural_card_terms": cultural_card_terms(cultural_cards),
         "degrade_mode": degrade,
         "llm_model": model or "unknown",
         "llm_latency_ms": round(total_latency, 2),
