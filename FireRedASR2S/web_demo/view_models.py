@@ -160,6 +160,133 @@ def build_cultural_cards_markdown(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _hit_count(items: Any) -> int:
+    if not items:
+        return 0
+    if isinstance(items, list):
+        return len(items)
+    if isinstance(items, dict):
+        return len(items)
+    return 0
+
+
+def _number(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_percent(value: Any) -> str:
+    n = _number(value)
+    if n is None:
+        return "暂无"
+    if n <= 1:
+        n *= 100
+    return f"{n:.1f}%"
+
+
+def _format_ms(value: Any) -> str:
+    n = _number(value)
+    if n is None:
+        return "暂无"
+    return f"{n:.1f} ms"
+
+
+def _pick_first_number(*values: Any) -> float | None:
+    for value in values:
+        n = _number(value)
+        if n is not None:
+            return n
+    return None
+
+
+def _rag_hits(rewrite: dict[str, Any]) -> list[Any]:
+    hits: list[Any] = []
+    for key in ("rag_hits", "pronunciation_rag_hits"):
+        value = rewrite.get(key)
+        if isinstance(value, list):
+            hits.extend(value)
+    return hits
+
+
+def _rag_hit_rate(rewrite: dict[str, Any], rag_hit_count: int) -> str:
+    explicit = _pick_first_number(
+        rewrite.get("rag_hit_rate"),
+        rewrite.get("pronunciation_rag_hit_rate"),
+        rewrite.get("rag_recall_rate"),
+    )
+    if explicit is not None:
+        return _format_percent(explicit)
+    query_count = _pick_first_number(
+        rewrite.get("rag_query_count"),
+        rewrite.get("pronunciation_rag_query_count"),
+        rewrite.get("rag_total"),
+    )
+    if query_count and query_count > 0:
+        return _format_percent(rag_hit_count / query_count)
+    if rag_hit_count > 0:
+        return "已命中"
+    return "暂无"
+
+
+def _rag_latency(rewrite: dict[str, Any]) -> str:
+    return _format_ms(
+        _pick_first_number(
+            rewrite.get("rag_latency_ms"),
+            rewrite.get("pronunciation_rag_latency_ms"),
+            rewrite.get("rag_elapsed_ms"),
+        )
+    )
+
+
+def _rag_similarity(rewrite: dict[str, Any], hits: list[Any]) -> str:
+    explicit = _pick_first_number(
+        rewrite.get("semantic_similarity"),
+        rewrite.get("rag_semantic_similarity"),
+        rewrite.get("rag_avg_similarity"),
+        rewrite.get("rag_top_score"),
+    )
+    if explicit is not None:
+        return f"{explicit:.3f}"
+    scores = []
+    for hit in hits:
+        if not isinstance(hit, dict):
+            continue
+        score = _pick_first_number(hit.get("semantic_similarity"), hit.get("similarity"), hit.get("score"))
+        if score is not None:
+            scores.append(score)
+    if scores:
+        return f"{max(scores):.3f}"
+    return "暂无"
+
+
+def build_result_stats_markdown(result: dict[str, Any]) -> str:
+    rewrite = result.get("rewrite") or {}
+    pronunciation_count = _hit_count(rewrite.get("pronunciation_rule_hits"))
+    prosody_count = _hit_count(rewrite.get("prosody_rule_hits"))
+    rag_hits = _rag_hits(rewrite)
+    rag_count = len(rag_hits)
+    final_count = pronunciation_count + prosody_count + rag_count
+    return "\n".join(
+        [
+            "### 规则命中统计",
+            (
+                f"<small>最终命中次数：{final_count} 次 | "
+                f"发音规则：{pronunciation_count} | 韵律规则：{prosody_count} | RAG：{rag_count}</small>"
+            ),
+            "### RAG 看板",
+            (
+                f"<small>命中率：{_rag_hit_rate(rewrite, rag_count)} | "
+                f"耗时：{_rag_latency(rewrite)} | "
+                f"语义相似度：{_rag_similarity(rewrite, rag_hits)}</small>"
+            ),
+        ]
+    )
+
+
 def build_recommendation_markdown(result: dict[str, Any]) -> str:
     tts = result.get("tts") or {}
     gap_summary = tts.get("gap_summary") or {}
@@ -169,6 +296,7 @@ def build_recommendation_markdown(result: dict[str, Any]) -> str:
     recommended_route = tts.get("recommended_main_output") or gap_summary.get("recommended_route") or "gold_teacher"
     return "\n".join(
         [
+            build_result_stats_markdown(result),
             "### 试听建议",
             f"- 推荐先听：{_recommended_route_label(recommended_route)}",
             "- 试听顺序：先听 Gold Teacher 确认方言发音，再听 Voice Matched 判断音色迁移。",
