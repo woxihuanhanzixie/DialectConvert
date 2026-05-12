@@ -112,7 +112,7 @@ def synthesize_voice_clone(
             "error": "Missing QWEN_TTS_API_KEY or DASHSCOPE_API_KEY",
         }
     try:
-        if cfg.voice_clone_provider == "qwen_vc":
+        if cfg.voice_clone_provider in {"qwen_vc", "qwen_voice_clone", "qwen"}:
             voice_info = create_qwen_voice(ref_audio_path, cfg, preferred_name=preferred_name)
             result = synthesize_qwen_vc(text, voice_info["voice"], out_wav, cfg)
             return {
@@ -121,6 +121,9 @@ def synthesize_voice_clone(
                 "audio_url": result["audio_url"],
                 "expires_at": result["expires_at"],
                 "voice": result["voice"],
+                "model": result.get("model", cfg.qwen_voice_target_model),
+                "voice_cache_hit": bool(voice_info.get("cache_hit")),
+                "reference_audio_validation": voice_info.get("reference_audio_validation", {}),
                 "error": "",
                 "instruction_mode_active": False,
                 "tts_style_instructions": cfg.tts_style_instructions,
@@ -165,6 +168,7 @@ def synthesize_voice_matched_from_teacher(
     cfg: Step2Config,
     *,
     preferred_name: str,
+    input_text: str = "",
 ) -> dict[str, object]:
     return convert_voice_from_teacher(
         teacher_wav_path,
@@ -172,6 +176,7 @@ def synthesize_voice_matched_from_teacher(
         out_wav,
         cfg,
         preferred_name=preferred_name,
+        input_text=input_text,
     )
 
 

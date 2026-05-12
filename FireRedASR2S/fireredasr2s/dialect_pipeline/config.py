@@ -26,6 +26,13 @@ def _load_env_file() -> None:
                 os.environ[key] = val
 
 
+def _voice_match_provider_from_env() -> str:
+    provider = os.getenv("VOICE_MATCH_PROVIDER", os.getenv("VOICE_CONVERSION_PROVIDER", "openvoice")).strip().lower()
+    if provider in {"qwen_voice_clone", "qwen_vc", "qwen"}:
+        return os.getenv("TEACHER_FIRST_VOICE_MATCH_PROVIDER", "openvoice").strip().lower()
+    return provider or "openvoice"
+
+
 @dataclass
 class Step2Config:
     provider: str
@@ -48,11 +55,14 @@ class Step2Config:
     voice_clone_provider: str
     text_clone_provider: str
     voice_conversion_provider: str
+    qwen_voice_enrollment_model: str
+    qwen_voice_target_model: str
     voice_conversion_mode: str
     voice_conversion_model: str
     voice_conversion_device: str
     qwen_tts_vc_model: str
     qwen_tts_customization_path: str
+    qwen_voice_cache_dir: Path
     speaker_ref_audio_min_s: float
     speaker_ref_audio_max_s: float
     speaker_ref_keep_raw: bool
@@ -98,14 +108,25 @@ class Step2Config:
             ).strip(),
             voice_clone_provider=os.getenv("VOICE_CLONE_PROVIDER", "qwen_vc").strip(),
             text_clone_provider=os.getenv("TEXT_CLONE_PROVIDER", os.getenv("VOICE_CLONE_PROVIDER", "qwen_vc")).strip(),
-            voice_conversion_provider=os.getenv("VOICE_CONVERSION_PROVIDER", "none").strip(),
+            voice_conversion_provider=_voice_match_provider_from_env(),
+            qwen_voice_enrollment_model=os.getenv("QWEN_VOICE_ENROLLMENT_MODEL", "qwen-voice-enrollment").strip(),
+            qwen_voice_target_model=os.getenv(
+                "QWEN_VOICE_TARGET_MODEL",
+                os.getenv("QWEN_TTS_VC_MODEL", "qwen3-tts-vc-2026-01-22"),
+            ).strip(),
             voice_conversion_mode=os.getenv("VOICE_CONVERSION_MODE", "teacher_audio_to_audio").strip(),
             voice_conversion_model=os.getenv("VOICE_CONVERSION_MODEL", "").strip(),
             voice_conversion_device=os.getenv("VOICE_CONVERSION_DEVICE", "cpu").strip(),
-            qwen_tts_vc_model=os.getenv("QWEN_TTS_VC_MODEL", "qwen3-tts-vc-2026-01-22").strip(),
+            qwen_tts_vc_model=os.getenv(
+                "QWEN_TTS_VC_MODEL",
+                os.getenv("QWEN_VOICE_TARGET_MODEL", "qwen3-tts-vc-2026-01-22"),
+            ).strip(),
             qwen_tts_customization_path=os.getenv("QWEN_TTS_CUSTOMIZATION_PATH", "/services/audio/tts/customization").strip(),
-            speaker_ref_audio_min_s=float(os.getenv("SPEAKER_REF_AUDIO_MIN_S", "3")),
-            speaker_ref_audio_max_s=float(os.getenv("SPEAKER_REF_AUDIO_MAX_S", "10")),
+            qwen_voice_cache_dir=Path(
+                os.getenv("QWEN_VOICE_CACHE_DIR", str(root / "runtime_data" / "step2_output" / "voice_cache"))
+            ),
+            speaker_ref_audio_min_s=float(os.getenv("SPEAKER_REF_AUDIO_MIN_S", "10")),
+            speaker_ref_audio_max_s=float(os.getenv("SPEAKER_REF_AUDIO_MAX_S", "20")),
             speaker_ref_keep_raw=os.getenv("SPEAKER_REF_KEEP_RAW", "1") == "1",
             speaker_similarity_priority=os.getenv("SPEAKER_SIMILARITY_PRIORITY", "high").strip(),
             reference_audio_strategy=os.getenv("REFERENCE_AUDIO_STRATEGY", "vad_concat").strip(),

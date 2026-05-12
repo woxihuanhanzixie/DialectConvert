@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>声临其境 Demo1</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <p class="eyebrow">Demo1 Public Preview</p>
+      <h1>普通话转多方言语音</h1>
+      <p class="subtitle">上传一段普通话音频和 10-20 秒参考音频，生成方言 Gold Teacher，并通过 Qwen 声音复刻 API 生成 Voice Matched。</p>
+    </section>
+
+    <section class="panel form-panel">
+      <div class="grid">
+        <label class="field">
+          <span>主音频</span>
+          <input id="input-audio" type="file" accept="audio/*" capture>
+        </label>
+
+        <label class="field">
+          <span>参考音频</span>
+          <input id="ref-audio" type="file" accept="audio/*" capture>
+        </label>
+
+        <label class="field">
+          <span>目标方言</span>
+          <select id="target-dialect">
+            <option value="yue:guangdong_general">粤语</option>
+            <option value="sichuan:sichuan_general">四川话</option>
+            <option value="minnan:minnan_general">闽南语</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>方言音色</span>
+          <select id="voice">
+            <option value="Kiki">Kiki</option>
+            <option value="Rocky">Rocky</option>
+          </select>
+        </label>
+
+        <label class="field checkbox">
+          <input id="voice-matched-enabled" type="checkbox" checked>
+          <span>启用 Voice Matched</span>
+        </label>
+
+        <label class="field">
+          <span>Voice Matched Provider</span>
+          <select id="voice-clone-provider">
+            <option value="qwen_voice_clone" selected>qwen_voice_clone</option>
+            <option value="qwen_vc">qwen_vc</option>
+            <option value="openvoice">openvoice</option>
+            <option value="rvc">rvc</option>
+            <option value="none">none</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="submit-btn" type="button">开始转换</button>
+        <p id="status-text" class="status idle">等待上传音频</p>
+      </div>
+      <p class="hint">国内公网部署请使用同源 Nginx + FastAPI 后端；手机端可直接点“选择文件”后录音。参考音频建议 10-20 秒、单人声、环境安静。</p>
+    </section>
+
+    <section class="results">
+      <article class="panel summary-panel">
+        <div class="summary-row">
+          <span>推荐主输出</span>
+          <strong id="recommended-output">未生成</strong>
+        </div>
+        <div class="summary-row">
+          <span>总耗时</span>
+          <strong id="total-latency">-</strong>
+        </div>
+        <div class="summary-row">
+          <span>错误提示</span>
+          <strong id="error-text">无</strong>
+        </div>
+      </article>
+
+      <div class="audio-grid">
+        <article class="panel audio-card">
+          <div class="card-head">
+            <h2>Gold Teacher</h2>
+            <a id="gold-download" class="download-link hidden" href="#" download>下载</a>
+          </div>
+          <audio id="gold-audio" controls preload="none"></audio>
+          <p id="gold-note" class="card-note">生成后会在这里显示。</p>
+        </article>
+
+        <article class="panel audio-card">
+          <div class="card-head">
+            <h2>Voice Matched</h2>
+            <a id="matched-download" class="download-link hidden" href="#" download>下载</a>
+          </div>
+          <audio id="matched-audio" controls preload="none"></audio>
+          <p id="matched-note" class="card-note">启用后会在这里显示。</p>
+        </article>
+      </div>
+
+      <div class="text-grid">
+        <article class="panel text-card">
+          <h3>ASR 原始文本</h3>
+          <p id="asr-text">-</p>
+        </article>
+        <article class="panel text-card">
+          <h3>审查后文本</h3>
+          <p id="reviewed-text">-</p>
+        </article>
+        <article class="panel text-card text-card-wide">
+          <h3>目标方言结果</h3>
+          <p id="semantic-text">-</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

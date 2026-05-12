@@ -29,6 +29,10 @@ class AudioNormalizeResponse(BaseModel):
 class AsrResponse(BaseModel):
     uttid: str
     text: str
+    asr_provider: str | None = None
+    asr_model: str | None = None
+    request_id: str | None = None
+    cloud_asr_error: str | None = None
     confidence: float | None = None
     timestamp: list[list[Any]] | None = None
     punc_text: str | None = None

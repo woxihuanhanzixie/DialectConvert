@@ -260,6 +260,7 @@ def tts_voice_match_from_teacher(
     *,
     speaker_ref_audio: str,
     preferred_name: str = "demo1_voice",
+    input_text: str = "",
 ) -> dict[str, Any]:
     t0 = time.perf_counter()
     result = synthesize_voice_matched_from_teacher(
@@ -268,11 +269,17 @@ def tts_voice_match_from_teacher(
         wav_path,
         cfg,
         preferred_name=preferred_name,
+        input_text=input_text,
     )
     result["voice_clone_enabled"] = True
     result["voice_clone_provider"] = cfg.voice_conversion_provider
-    result["clone_mode"] = "teacher_audio_to_audio"
-    result["speaker_similarity_note"] = "尝试保留 gold teacher 发音，只迁移参考说话人音色"
+    provider = (cfg.voice_conversion_provider or "").strip().lower()
+    if provider in {"qwen_voice_clone", "qwen_vc", "qwen"}:
+        result["clone_mode"] = "qwen_voice_enrollment_tts_vc"
+        result["speaker_similarity_note"] = "已调用 Qwen 声音复刻 API，使用参考音频创建或复用专属音色后合成 Voice Matched"
+    else:
+        result["clone_mode"] = "teacher_audio_to_audio"
+        result["speaker_similarity_note"] = "尝试保留 gold teacher 发音，只迁移参考说话人音色"
     result["speaker_similarity_priority"] = cfg.speaker_similarity_priority
     result["tts_fluency_mode"] = cfg.tts_fluency_mode
     result["tts_style_instructions"] = cfg.tts_style_instructions

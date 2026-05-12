@@ -1,0 +1,3 @@
+2026-05-12 17:30:21,717 (_client:1025) INFO: HTTP Request: GET http://127.0.0.1:7861/gradio_api/startup-events "HTTP/1.1 200 OK"
+2026-05-12 17:30:21,771 (_client:1025) INFO: HTTP Request: HEAD http://127.0.0.1:7861/ "HTTP/1.1 200 OK"
+2026-05-12 17:30:22,264 (_client:1025) INFO: HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"

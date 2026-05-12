@@ -1,0 +1,29 @@
+Traceback (most recent call last):
+  File "D:\Competition\FireRedASR2S\fireredasr2s\fireredasr2\__init__.py", line 15, in <module>
+    from fireredasr2s.fireredasr2.asr import FireRedAsr2, FireRedAsr2Config
+  File "D:\Competition\FireRedASR2S\fireredasr2s\fireredasr2\asr.py", line 11, in <module>
+    from .data.asr_feat import ASRFeatExtractor
+  File "D:\Competition\FireRedASR2S\fireredasr2s\fireredasr2\data\asr_feat.py", line 6, in <module>
+    import kaldiio
+ModuleNotFoundError: No module named 'kaldiio'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\Competition\FireRedASR2S\web_demo\app.py", line 9, in <module>
+    from .client import get_demo_capabilities, load_eval_rows, run_pipeline_from_audio
+  File "D:\Competition\FireRedASR2S\web_demo\client.py", line 8, in <module>
+    from dialect_service.pipeline_engine import get_pipeline_engine
+  File "D:\Competition\FireRedASR2S\dialect_service\pipeline_engine.py", line 10, in <module>
+    from asr_service.asr_engine import get_asr_engine
+  File "D:\Competition\FireRedASR2S\asr_service\asr_engine.py", line 9, in <module>
+    from fireredasr2s.fireredasr2 import FireRedAsr2, FireRedAsr2Config
+  File "D:\Competition\FireRedASR2S\fireredasr2s\fireredasr2\__init__.py", line 19, in <module>
+    from .asr import FireRedAsr2, FireRedAsr2Config
+  File "D:\Competition\FireRedASR2S\fireredasr2s\fireredasr2\asr.py", line 11, in <module>
+    from .data.asr_feat import ASRFeatExtractor
+  File "D:\Competition\FireRedASR2S\fireredasr2s\fireredasr2\data\asr_feat.py", line 6, in <module>
+    import kaldiio
+ModuleNotFoundError: No module named 'kaldiio'

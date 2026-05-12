@@ -4,6 +4,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
 from .audio_io import AudioNormalizeError, get_runtime_capabilities, make_temp_dir, normalize_upload_to_wav
 from .asr_engine import get_asr_engine
+from .cloud_asr import DashScopeAsrEngine, transcribe_api_first
 from .config import AsrServiceConfig
 from .schemas import AsrResponse, AudioNormalizeResponse, ErrorResponse, HealthResponse
 from .system_engine import get_asr_system_engine
@@ -18,10 +19,13 @@ app = FastAPI(
 
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
+    cfg = AsrServiceConfig.from_env()
     return HealthResponse(
         status="ok",
         capabilities=get_runtime_capabilities(),
         engine={
+            "provider": cfg.provider,
+            "cloud_asr": DashScopeAsrEngine(cfg).health(),
             "plain_asr": get_asr_engine().health(),
             "asr_system": get_asr_system_engine().health(),
         },
@@ -60,24 +64,33 @@ async def transcribe(
     try:
         cfg = AsrServiceConfig.from_env()
         wav_path, meta = await normalize_upload_to_wav(file, work_dir, frontend_mode=frontend_mode or cfg.frontend_mode_default)
-        result = None
-        try:
-            result = get_asr_system_engine().process_file(
-                wav_path,
-                enable_vad=enable_vad,
-                enable_lid=enable_lid,
-                enable_punc=enable_punc,
-            )
-        except Exception:
-            result = get_asr_engine().transcribe_file(
-                wav_path,
-                enable_punc=enable_punc,
-                return_timestamp=return_timestamp,
-            )
-            result["detected_languages"] = []
-            result["vad_segments_ms"] = []
-            result["sentences"] = []
-            result["words"] = []
+        result, cloud_error = transcribe_api_first(
+            wav_path,
+            cfg,
+            enable_punc=enable_punc,
+            return_timestamp=return_timestamp,
+        )
+        if result is None:
+            try:
+                result = get_asr_system_engine().process_file(
+                    wav_path,
+                    enable_vad=enable_vad,
+                    enable_lid=enable_lid,
+                    enable_punc=enable_punc,
+                )
+                result["asr_provider"] = "local_firered_system"
+            except Exception:
+                result = get_asr_engine().transcribe_file(
+                    wav_path,
+                    enable_punc=enable_punc,
+                    return_timestamp=return_timestamp,
+                )
+                result["detected_languages"] = []
+                result["vad_segments_ms"] = []
+                result["sentences"] = []
+                result["words"] = []
+                result["asr_provider"] = "local_firered_plain"
+            result["cloud_asr_error"] = cloud_error
         result["audio_quality"] = (meta.get("audio_frontend") or {}).get("work_audio")
         return AsrResponse(**result, audio_meta=meta)
     except AudioNormalizeError as e:

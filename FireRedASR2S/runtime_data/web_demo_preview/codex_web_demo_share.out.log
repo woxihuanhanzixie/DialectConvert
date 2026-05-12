@@ -1,0 +1,6 @@
+* Running on local URL:  http://0.0.0.0:7862
+* Running on public URL: https://26fbdf044d5321cab2.gradio.live
+
+This share link expires in 1 week. For free permanent hosting and GPU upgrades, run `gradio deploy` from the terminal in the working directory to deploy to Hugging Face Spaces (https://huggingface.co/spaces)
+local_url=http://localhost:7862/
+share_url=https://26fbdf044d5321cab2.gradio.live
