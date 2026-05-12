@@ -226,8 +226,8 @@ def tts_text(
         result["fallback_reason"] = ""
     result["speaker_similarity_priority"] = cfg.speaker_similarity_priority
     result["tts_fluency_mode"] = cfg.tts_fluency_mode
-    result["tts_style_instructions"] = cfg.tts_style_instructions
-    result["instruction_mode_active"] = False
+    result["tts_style_instructions"] = result.get("tts_style_instructions", cfg.tts_style_instructions)
+    result["instruction_mode_active"] = result.get("instruction_mode_active", False)
     result["latency_ms"] = round((time.perf_counter() - t0) * 1000, 2)
     return result
 
@@ -243,8 +243,8 @@ def tts_gold_teacher(text: str, cfg: Step2Config, wav_path) -> dict[str, Any]:
     result["fallback_reason"] = ""
     result["speaker_similarity_priority"] = cfg.speaker_similarity_priority
     result["tts_fluency_mode"] = cfg.tts_fluency_mode
-    result["tts_style_instructions"] = cfg.tts_style_instructions
-    result["instruction_mode_active"] = False
+    result["tts_style_instructions"] = result.get("tts_style_instructions", cfg.tts_style_instructions)
+    result["instruction_mode_active"] = result.get("instruction_mode_active", False)
     result["latency_ms"] = round((time.perf_counter() - t0) * 1000, 2)
     return result
 
@@ -278,8 +278,8 @@ def tts_voice_match_from_teacher(
         result["speaker_similarity_note"] = "尝试保留 gold teacher 发音，只迁移参考说话人音色"
     result["speaker_similarity_priority"] = cfg.speaker_similarity_priority
     result["tts_fluency_mode"] = cfg.tts_fluency_mode
-    result["tts_style_instructions"] = cfg.tts_style_instructions
-    result["instruction_mode_active"] = False
+    result["tts_style_instructions"] = result.get("tts_style_instructions", cfg.tts_style_instructions)
+    result["instruction_mode_active"] = result.get("instruction_mode_active", False)
     result["latency_ms"] = round((time.perf_counter() - t0) * 1000, 2)
     return result
 

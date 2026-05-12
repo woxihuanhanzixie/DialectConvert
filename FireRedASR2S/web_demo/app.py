@@ -42,6 +42,10 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
             "audio_meta": tts.get("baseline_audio_meta"),
             "voice_clone_enabled": False,
             "route_reason": "",
+            "teacher_input_text": tts.get("teacher_input_text", "") or tts.get("baseline_tts_input_text", ""),
+            "teacher_input_mode": tts.get("teacher_input_mode", "") or tts.get("baseline_tts_input_mode", ""),
+            "teacher_style_instruction": tts.get("teacher_style_instruction", "") or tts.get("tts_style_instructions", ""),
+            "instruction_mode_active": tts.get("instruction_mode_active", False),
         }
     return {
         "route_name": "voice_matched",
@@ -61,6 +65,10 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
         "speaker_similarity_priority": "high",
         "tts_fluency_mode": "allow_rate_adjust",
         "route_reason": "",
+        "teacher_input_text": tts.get("teacher_input_text", ""),
+        "teacher_input_mode": "teacher_audio_to_audio",
+        "teacher_style_instruction": tts.get("teacher_style_instruction", "") or tts.get("tts_style_instructions", ""),
+        "instruction_mode_active": tts.get("instruction_mode_active", False),
     }
 
 
@@ -75,6 +83,10 @@ def _prepare_preview_file(wav_path: str, trace_id: str, slot_name: str) -> str |
     dst = preview_dir / f"{slot_name}{src.suffix.lower() or '.wav'}"
     shutil.copy2(src, dst)
     return str(dst.resolve())
+
+
+def _yes_no(value: bool) -> str:
+    return "是" if value else "否"
 
 
 def process_audio(
@@ -118,6 +130,28 @@ def process_audio(
     voice_matched_route = _resolve_route(tts, "voice_matched")
     gap_summary = tts.get("gap_summary") or {}
     voice_match_summary = tts.get("voice_match_summary") or {}
+
+    teacher_input_text = (
+        tts.get("teacher_input_text")
+        or teacher_route.get("teacher_input_text")
+        or teacher_route.get("input_text")
+        or tts.get("tts_input_text")
+        or ""
+    )
+    teacher_input_mode = (
+        tts.get("teacher_input_mode")
+        or teacher_route.get("teacher_input_mode")
+        or teacher_route.get("input_mode")
+        or tts.get("tts_input_mode")
+        or ""
+    )
+    teacher_style_instruction = (
+        tts.get("teacher_style_instruction")
+        or teacher_route.get("teacher_style_instruction")
+        or tts.get("tts_style_instructions")
+        or ""
+    )
+    instruction_active = bool(tts.get("instruction_mode_active") or teacher_route.get("instruction_mode_active"))
 
     trace_id = str(result.get("trace_id") or "latest")
     teacher_audio = None
@@ -179,6 +213,12 @@ def process_audio(
             f"韵律命中类别: {', '.join(rewrite.get('prosody_hit_categories') or []) or 'none'}",
         ]
     )
+    teacher_instruction_status = "\n".join(
+        [
+            f"Teacher input mode: {teacher_input_mode or 'unknown'}",
+            f"Instruction parameter active: {_yes_no(instruction_active)}",
+        ]
+    )
 
     recommendation_md = build_recommendation_markdown(result)
     text_compare_md = build_text_compare_markdown(result)
@@ -189,6 +229,9 @@ def process_audio(
     )
 
     return (
+        teacher_input_text,
+        teacher_style_instruction,
+        teacher_instruction_status,
         asr.get("punc_text") or asr.get("text") or "",
         review.get("asr_reviewed_text") or "",
         rewrite.get("tn_text") or "",
@@ -294,6 +337,9 @@ def build_demo() -> gr.Blocks:
                                 voice_matched_download_audio = gr.File(label="下载 Voice Matched 音频")
                                 voice_matched_card_md = gr.Markdown()
                         text_compare_md = gr.Markdown()
+                        teacher_input_text = gr.Textbox(label="Qwen TTS teacher 输入文本", lines=4)
+                        teacher_style_instruction = gr.Textbox(label="方言 style instruction", lines=4)
+                        teacher_instruction_status = gr.Textbox(label="Teacher 控制状态", lines=2)
                         gap_summary_md = gr.Markdown()
 
                 with gr.Row(equal_height=False):
@@ -328,6 +374,9 @@ def build_demo() -> gr.Blocks:
                         voice_clone_provider,
                     ],
                     outputs=[
+                        teacher_input_text,
+                        teacher_style_instruction,
+                        teacher_instruction_status,
                         asr_text,
                         reviewed_text,
                         tn_text,

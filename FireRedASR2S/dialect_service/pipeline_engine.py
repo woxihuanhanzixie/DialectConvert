@@ -14,7 +14,7 @@ from asr_service.cloud_asr import transcribe_api_first
 from asr_service.config import AsrServiceConfig
 from asr_service.system_engine import get_asr_system_engine
 from fireredasr2s.dialect_pipeline.config import Step2Config
-from fireredasr2s.dialect_pipeline.dialects import dialect_label, normalize_dialect_style
+from fireredasr2s.dialect_pipeline.dialects import build_teacher_style_instruction, dialect_label, normalize_dialect_style
 
 from .adapters import (
     review_asr_text,
@@ -173,6 +173,7 @@ class DialectPipelineEngine:
         route_reason: str,
         default_voice: str,
         voice_clone_enabled: bool,
+        teacher_style_instruction: str = "",
     ) -> dict[str, Any]:
         return {
             "route_name": route_name,
@@ -197,6 +198,9 @@ class DialectPipelineEngine:
             "tts_fluency_mode": tts_result.get("tts_fluency_mode", self.cfg.tts_fluency_mode),
             "tts_style_instructions": tts_result.get("tts_style_instructions", self.cfg.tts_style_instructions),
             "instruction_mode_active": tts_result.get("instruction_mode_active", False),
+            "teacher_input_text": input_text,
+            "teacher_input_mode": input_mode,
+            "teacher_style_instruction": teacher_style_instruction or tts_result.get("teacher_style_instruction", ""),
         }
 
     def _build_gap_summary(
@@ -487,6 +491,9 @@ class DialectPipelineEngine:
                 pivot_text_zh,
             )
             old_voice = self.cfg.qwen_tts_voice
+            old_style_instructions = self.cfg.tts_style_instructions
+            teacher_style_instruction = build_teacher_style_instruction(active_target_dialect, active_dialect_style)
+            self.cfg.tts_style_instructions = teacher_style_instruction
             if voice:
                 self.cfg.qwen_tts_voice = voice
             active_voice = self.cfg.qwen_tts_voice
@@ -545,6 +552,7 @@ class DialectPipelineEngine:
                     "instruction_mode_active": False,
                 }
             self.cfg.qwen_tts_voice = old_voice
+            self.cfg.tts_style_instructions = old_style_instructions
             teacher_route = self._build_route_payload(
                 "gold_teacher",
                 teacher_result,
@@ -553,6 +561,7 @@ class DialectPipelineEngine:
                 route_reason=f"gold teacher 固定作为系统{active_dialect_label}发音参考，只负责“怎么说”。{baseline_reason}",
                 default_voice=active_voice,
                 voice_clone_enabled=False,
+                teacher_style_instruction=teacher_style_instruction,
             )
             teacher_route["route_role"] = "gold_standard_pronunciation"
             voice_match_input_mode = "teacher_audio_to_audio"
@@ -569,6 +578,7 @@ class DialectPipelineEngine:
                 route_reason=voice_match_reason,
                 default_voice=active_voice,
                 voice_clone_enabled=voice_match_requested,
+                teacher_style_instruction=teacher_style_instruction,
             )
             voice_matched_route["tts_model"] = voice_matched_result.get("model", self.cfg.voice_conversion_model)
             voice_matched_route["voice_clone_provider"] = voice_matched_result.get("voice_clone_provider") or self.cfg.voice_conversion_provider
@@ -607,6 +617,9 @@ class DialectPipelineEngine:
                 "instruction_mode_active": primary_route["instruction_mode_active"],
                 "tts_input_text": teacher_route["input_text"],
                 "tts_input_mode": teacher_route["input_mode"],
+                "teacher_input_text": teacher_route["input_text"],
+                "teacher_input_mode": teacher_route["input_mode"],
+                "teacher_style_instruction": teacher_style_instruction,
                 "audio_meta": primary_route["audio_meta"],
                 "baseline_wav_path": teacher_route["wav_path"],
                 "baseline_audio_url": teacher_route["audio_url"],
@@ -727,6 +740,9 @@ class DialectPipelineEngine:
                 pivot_text_zh,
             )
             old_voice = self.cfg.qwen_tts_voice
+            old_style_instructions = self.cfg.tts_style_instructions
+            teacher_style_instruction = build_teacher_style_instruction(active_target_dialect, active_dialect_style)
+            self.cfg.tts_style_instructions = teacher_style_instruction
             if voice:
                 self.cfg.qwen_tts_voice = voice
             active_voice = self.cfg.qwen_tts_voice
@@ -785,6 +801,7 @@ class DialectPipelineEngine:
                     "instruction_mode_active": False,
                 }
             self.cfg.qwen_tts_voice = old_voice
+            self.cfg.tts_style_instructions = old_style_instructions
             teacher_route = self._build_route_payload(
                 "gold_teacher",
                 teacher_result,
@@ -793,6 +810,7 @@ class DialectPipelineEngine:
                 route_reason=f"gold teacher 固定作为系统{active_dialect_label}发音参考，只负责“怎么说”。{baseline_reason}",
                 default_voice=active_voice,
                 voice_clone_enabled=False,
+                teacher_style_instruction=teacher_style_instruction,
             )
             teacher_route["route_role"] = "gold_standard_pronunciation"
             voice_match_input_mode = "teacher_audio_to_audio"
@@ -809,6 +827,7 @@ class DialectPipelineEngine:
                 route_reason=voice_match_reason,
                 default_voice=active_voice,
                 voice_clone_enabled=voice_match_requested,
+                teacher_style_instruction=teacher_style_instruction,
             )
             voice_matched_route["tts_model"] = voice_matched_result.get("model", self.cfg.voice_conversion_model)
             voice_matched_route["voice_clone_provider"] = voice_matched_result.get("voice_clone_provider") or self.cfg.voice_conversion_provider
@@ -847,6 +866,9 @@ class DialectPipelineEngine:
                 "instruction_mode_active": primary_route["instruction_mode_active"],
                 "tts_input_text": teacher_route["input_text"],
                 "tts_input_mode": teacher_route["input_mode"],
+                "teacher_input_text": teacher_route["input_text"],
+                "teacher_input_mode": teacher_route["input_mode"],
+                "teacher_style_instruction": teacher_style_instruction,
                 "audio_meta": primary_route["audio_meta"],
                 "baseline_wav_path": teacher_route["wav_path"],
                 "baseline_audio_url": teacher_route["audio_url"],

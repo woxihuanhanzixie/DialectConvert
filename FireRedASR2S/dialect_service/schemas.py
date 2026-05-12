@@ -62,6 +62,8 @@ class TtsRequest(BaseModel):
     voice: str = "Kiki"
     model: str = "qwen3-tts-flash"
     language_type: str = "Chinese"
+    target_dialect: str = "yue"
+    dialect_style: str = ""
     voice_clone_enabled: bool = False
     speaker_ref_audio: str = ""
     voice_clone_provider: str = "openvoice"
@@ -94,6 +96,9 @@ class TtsRouteResponse(BaseModel):
     tts_fluency_mode: str = "allow_rate_adjust"
     tts_style_instructions: str = ""
     instruction_mode_active: bool = False
+    teacher_input_text: str = ""
+    teacher_input_mode: str = "semantic_text"
+    teacher_style_instruction: str = ""
 
 
 class GapSummaryResponse(BaseModel):
@@ -138,6 +143,9 @@ class TtsResponse(BaseModel):
     instruction_mode_active: bool = False
     tts_input_text: str = ""
     tts_input_mode: str = "semantic_text"
+    teacher_input_text: str = ""
+    teacher_input_mode: str = "semantic_text"
+    teacher_style_instruction: str = ""
     audio_meta: dict[str, Any] | None = None
     baseline_wav_path: str = ""
     baseline_audio_url: str = ""
