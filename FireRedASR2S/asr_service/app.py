@@ -5,7 +5,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from .audio_io import AudioNormalizeError, get_runtime_capabilities, make_temp_dir, normalize_upload_to_wav
 from .asr_engine import get_asr_engine
 from .config import AsrServiceConfig
-from .schemas import AsrResponse, ErrorResponse, HealthResponse
+from .schemas import AsrResponse, AudioNormalizeResponse, ErrorResponse, HealthResponse
 from .system_engine import get_asr_system_engine
 
 
@@ -26,6 +26,25 @@ def healthz() -> HealthResponse:
             "asr_system": get_asr_system_engine().health(),
         },
     )
+
+
+@app.post("/api/v1/audio/normalize", response_model=AudioNormalizeResponse)
+async def normalize_audio(
+    file: UploadFile = File(...),
+    frontend_mode: str = Form("light_asr_safe"),
+) -> AudioNormalizeResponse:
+    work_dir = make_temp_dir(prefix="demo1_audio_normalize_")
+    try:
+        wav_path, meta = await normalize_upload_to_wav(file, work_dir, frontend_mode=frontend_mode or "light_asr_safe")
+        return AudioNormalizeResponse(
+            status="ok",
+            wav_path=str(wav_path),
+            audio_meta=meta,
+            audio_quality=(meta.get("audio_frontend") or {}).get("work_audio"),
+            conversion=meta.get("conversion"),
+        )
+    except AudioNormalizeError as e:
+        raise HTTPException(status_code=400, detail=e.to_detail()) from e
 
 
 @app.post("/api/v1/asr/transcribe", response_model=AsrResponse)
@@ -62,6 +81,6 @@ async def transcribe(
         result["audio_quality"] = (meta.get("audio_frontend") or {}).get("work_audio")
         return AsrResponse(**result, audio_meta=meta)
     except AudioNormalizeError as e:
-        raise HTTPException(status_code=400, detail={"error_code": "INVALID_AUDIO_FORMAT", "message": str(e)}) from e
+        raise HTTPException(status_code=400, detail=e.to_detail()) from e
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail={"error_code": "ASR_ENGINE_ERROR", "message": str(e)}) from e

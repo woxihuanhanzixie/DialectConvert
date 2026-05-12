@@ -36,6 +36,7 @@ dist/
 FireRedASR2S/pretrained_models/
 FireRedASR2S/runtime_data/models/
 FireRedASR2S/runtime_data/asr_output/
+FireRedASR2S/runtime_data/tmp/
 FireRedASR2S/runtime_data/step2_output/
 FireRedASR2S/runtime_data/audio_16k/
 FireRedASR2S/runtime_data/web_demo_uploads/

@@ -169,7 +169,7 @@ async def pipeline(
             return PipelineResponse(**result)
         raise HTTPException(status_code=400, detail="Either file or text is required.")
     except AudioNormalizeError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail=e.to_detail()) from e
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001

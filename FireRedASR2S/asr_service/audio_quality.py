@@ -53,6 +53,21 @@ def analyze_audio_quality(audio_path: str | Path) -> dict[str, Any]:
     }
 
 
+def validate_audio_for_mode(quality: dict[str, Any], mode: str) -> tuple[str, str] | None:
+    duration_s = float(quality.get("duration_s") or 0.0)
+    silence_ratio = float(quality.get("silence_ratio") or 1.0)
+    rms_db = float(quality.get("rms_db") or -120.0)
+    min_duration_s = 3.0 if mode.startswith("clone_ref") else 0.8
+
+    if duration_s <= 0:
+        return "AUDIO_EMPTY_OR_SILENT", "Audio is empty after normalization."
+    if silence_ratio >= 0.995 or rms_db <= -75:
+        return "AUDIO_EMPTY_OR_SILENT", "Audio is silent or contains no usable speech."
+    if duration_s < min_duration_s:
+        return "AUDIO_TOO_SHORT", f"Audio duration {duration_s:.3f}s is shorter than required {min_duration_s:.1f}s."
+    return None
+
+
 def trim_long_silence(audio: np.ndarray, sr: int, threshold: float = 0.01) -> np.ndarray:
     if audio.size == 0:
         return audio

@@ -14,7 +14,16 @@ class AudioMeta(BaseModel):
     channels: int
     duration_s: float
     format: str
+    conversion: dict[str, Any] | None = None
     audio_frontend: dict[str, Any] | None = None
+
+
+class AudioNormalizeResponse(BaseModel):
+    status: str
+    wav_path: str
+    audio_meta: AudioMeta
+    audio_quality: dict[str, Any] | None = None
+    conversion: dict[str, Any] | None = None
 
 
 class AsrResponse(BaseModel):
