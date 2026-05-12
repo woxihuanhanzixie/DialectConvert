@@ -8,6 +8,7 @@ import urllib.request
 from typing import Any
 
 from fireredasr2s.dialect_pipeline.config import Step2Config
+from fireredasr2s.dialect_pipeline.dialects import dialect_label, normalize_dialect_style
 from fireredasr2s.dialect_pipeline.pronunciation import build_pronunciation_text
 from fireredasr2s.dialect_pipeline.prosody import build_prosody_text
 from fireredasr2s.dialect_pipeline.rewrite import rewrite_to_dialect
@@ -129,6 +130,7 @@ def rewrite_text(
     target_dialect: str = "yue",
     dialect_style: str = "guangdong_general",
 ) -> dict[str, Any]:
+    dialect_style = normalize_dialect_style(target_dialect, dialect_style)
     source_for_rewrite = pivot_text_zh or text
     rewrite_input_text = prepare_reviewed_text_for_rewrite(source_for_rewrite)
     segments = split_sentences(rewrite_input_text, max_len=segment_max_len) or [rewrite_input_text]
@@ -179,6 +181,7 @@ def rewrite_text(
         "prosody_hit_categories": prosody["prosody_hit_categories"],
         "prosody_rule_hits": prosody["prosody_rule_hits"],
         "prosody_fallback_used": prosody["prosody_fallback_used"],
+        "prosody_notes": prosody["prosody_notes"],
         "degrade_mode": degrade,
         "llm_model": model or "unknown",
         "llm_latency_ms": round(total_latency, 2),
@@ -232,10 +235,11 @@ def tts_text(
 def tts_gold_teacher(text: str, cfg: Step2Config, wav_path) -> dict[str, Any]:
     t0 = time.perf_counter()
     result = synthesize_gold_teacher(text, wav_path, cfg)
+    active_label = dialect_label(cfg.default_target_dialect, cfg.default_dialect_style)
     result["voice_clone_enabled"] = False
     result["voice_clone_provider"] = ""
     result["clone_mode"] = "gold_teacher"
-    result["speaker_similarity_note"] = "系统粤语 TTS 作为发音和流畅度金标准"
+    result["speaker_similarity_note"] = f"系统{active_label} TTS 作为发音和流畅度参考"
     result["fallback_reason"] = ""
     result["speaker_similarity_priority"] = cfg.speaker_similarity_priority
     result["tts_fluency_mode"] = cfg.tts_fluency_mode

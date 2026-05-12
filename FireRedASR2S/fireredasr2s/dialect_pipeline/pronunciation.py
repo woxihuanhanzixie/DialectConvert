@@ -21,6 +21,12 @@ _YUE_HIGH_RISK_TERMS = (
     "然后",
 )
 
+_HIGH_RISK_TERMS_BY_DIALECT = {
+    "yue": _YUE_HIGH_RISK_TERMS,
+    "sichuan": ("什么", "为什么", "没有", "可以", "这样", "非常", "事情"),
+    "minnan": ("什么", "为什么", "不是", "没有", "可以", "这样", "事情"),
+}
+
 
 def build_pronunciation_text(
     semantic_text: str,
@@ -138,11 +144,12 @@ def rag_pronunciation_lookup(
 
 
 def _should_use_llm_fallback(original_text: str, pronunciation_text: str, target_dialect: str) -> bool:
-    if target_dialect != "yue":
+    high_risk_terms = _HIGH_RISK_TERMS_BY_DIALECT.get(target_dialect, ())
+    if not high_risk_terms:
         return False
     if original_text == pronunciation_text:
-        return any(token in original_text for token in _YUE_HIGH_RISK_TERMS)
-    return any(token in pronunciation_text for token in _YUE_HIGH_RISK_TERMS)
+        return any(token in original_text for token in high_risk_terms)
+    return any(token in pronunciation_text for token in high_risk_terms)
 
 
 def _collect_hit_categories(rule_hits: list[dict[str, Any]]) -> list[str]:
@@ -157,6 +164,18 @@ def _fallback_system_prompt(target_dialect: str, dialect_style: str) -> str:
             "你是方言 TTS 发音修正助手。任务不是做语义改写，而是把文本修成更适合语音合成发音的版本。"
             f"目标方言是{style}。"
             "重点是把容易被读成普通话的词，替换成更稳定、更常见的方言口语写法。"
+            "保持原意，不要扩写，不要解释，只输出最终文本。"
+        )
+    if target_dialect == "sichuan":
+        return (
+            "你是方言 TTS 发音修正助手。任务不是做语义改写，而是把文本修成更适合四川话语音合成发音的版本。"
+            "重点把容易被读成普通话的词替换成更稳定、更常见的四川话口语写法。"
+            "保持原意，不要扩写，不要解释，只输出最终文本。"
+        )
+    if target_dialect == "minnan":
+        return (
+            "你是方言 TTS 发音修正助手。任务不是做语义改写，而是把文本修成更适合闽南语语音合成发音的版本。"
+            "重点把容易被读成普通话的词替换成更稳定、更常见的闽南语口语写法。"
             "保持原意，不要扩写，不要解释，只输出最终文本。"
         )
     return (

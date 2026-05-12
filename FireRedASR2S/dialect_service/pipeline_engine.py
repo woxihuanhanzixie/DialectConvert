@@ -10,6 +10,7 @@ import soundfile as sf
 from asr_service.asr_engine import get_asr_engine
 from asr_service.system_engine import get_asr_system_engine
 from fireredasr2s.dialect_pipeline.config import Step2Config
+from fireredasr2s.dialect_pipeline.dialects import dialect_label, normalize_dialect_style
 
 from .adapters import (
     review_asr_text,
@@ -295,7 +296,7 @@ class DialectPipelineEngine:
         matched_ok = bool(voice_matched_route.get("wav_path")) and not voice_matched_route.get("error")
         provider = voice_matched_route.get("voice_clone_provider") or self.cfg.voice_conversion_provider
         if matched_ok:
-            reason = "先听 gold teacher 确认粤语发音，再听 voice matched 判断音色迁移是否值得保留。"
+            reason = "先听 gold teacher 确认方言发音，再听 voice matched 判断音色迁移是否值得保留。"
         else:
             reason = "当前音色转换不可用或失败，主试听结果回退为 gold teacher。"
         return {
@@ -327,9 +328,16 @@ class DialectPipelineEngine:
         input_lang: str = "zh",
         voice_clone_enabled: bool = False,
         speaker_ref_audio: str = "",
+        target_dialect: str | None = None,
+        dialect_style: str | None = None,
     ) -> dict[str, Any]:
         trace_id = str(uuid.uuid4())
         t0 = perf_counter()
+        active_target_dialect = target_dialect or self.cfg.default_target_dialect
+        active_dialect_style = normalize_dialect_style(active_target_dialect, dialect_style or self.cfg.default_dialect_style)
+        active_dialect_label = dialect_label(active_target_dialect, active_dialect_style)
+        self.cfg.default_target_dialect = active_target_dialect
+        self.cfg.default_dialect_style = active_dialect_style
         review = review_asr_text_en(text, self.cfg) if input_lang == "en" else review_asr_text(text, self.cfg, input_lang=input_lang)
         review_text_value = review["asr_reviewed_text"]
         pivot_text_zh = ""
@@ -347,8 +355,8 @@ class DialectPipelineEngine:
                 segment_max_len=segment_max_len,
                 input_lang=input_lang,
                 pivot_text_zh=pivot_text_zh,
-                target_dialect=self.cfg.default_target_dialect,
-                dialect_style=self.cfg.default_dialect_style,
+                target_dialect=active_target_dialect,
+                dialect_style=active_dialect_style,
             )
             rewrite["translation_notes"] = translation_notes
 
@@ -395,7 +403,7 @@ class DialectPipelineEngine:
                 teacher_result,
                 input_text=baseline_text,
                 input_mode=baseline_input_mode,
-                route_reason="gold teacher 固定作为系统粤语发音金标准，只负责“怎么说”。",
+                route_reason=f"gold teacher 固定作为系统{active_dialect_label}发音参考，只负责“怎么说”。",
                 default_voice=active_voice,
                 voice_clone_enabled=False,
             )
@@ -491,9 +499,16 @@ class DialectPipelineEngine:
         voice: str | None = None,
         voice_clone_enabled: bool = False,
         speaker_ref_audio: str = "",
+        target_dialect: str | None = None,
+        dialect_style: str | None = None,
     ) -> dict[str, Any]:
         trace_id = str(uuid.uuid4())
         t0 = perf_counter()
+        active_target_dialect = target_dialect or self.cfg.default_target_dialect
+        active_dialect_style = normalize_dialect_style(active_target_dialect, dialect_style or self.cfg.default_dialect_style)
+        active_dialect_label = dialect_label(active_target_dialect, active_dialect_style)
+        self.cfg.default_target_dialect = active_target_dialect
+        self.cfg.default_dialect_style = active_dialect_style
         try:
             asr_result = get_asr_system_engine().process_file(wav_path, enable_vad=True, enable_lid=True, enable_punc=enable_punc)
         except Exception:
@@ -518,8 +533,8 @@ class DialectPipelineEngine:
                 segment_max_len=segment_max_len,
                 input_lang=input_lang,
                 pivot_text_zh=pivot_text_zh,
-                target_dialect=self.cfg.default_target_dialect,
-                dialect_style=self.cfg.default_dialect_style,
+                target_dialect=active_target_dialect,
+                dialect_style=active_dialect_style,
             )
             if enable_rewrite
             else None
@@ -570,7 +585,7 @@ class DialectPipelineEngine:
                 teacher_result,
                 input_text=baseline_text,
                 input_mode=baseline_input_mode,
-                route_reason="gold teacher 固定作为系统粤语发音金标准，只负责“怎么说”。",
+                route_reason=f"gold teacher 固定作为系统{active_dialect_label}发音参考，只负责“怎么说”。",
                 default_voice=active_voice,
                 voice_clone_enabled=False,
             )

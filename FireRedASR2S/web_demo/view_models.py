@@ -17,7 +17,7 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
             "error": tts.get("baseline_error", ""),
             "input_text": tts.get("baseline_tts_input_text", ""),
             "input_mode": tts.get("baseline_tts_input_mode", ""),
-            "route_reason": "gold teacher 作为系统粤语发音金标准的兼容回退结果。",
+            "route_reason": "gold teacher 作为系统方言发音参考的兼容回退结果。",
         },
         "voice_matched": {
             "route_name": "voice_matched",

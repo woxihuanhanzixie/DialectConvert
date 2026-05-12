@@ -6,6 +6,7 @@ from typing import Any
 
 from asr_service.audio_io import get_runtime_capabilities, normalize_file_to_wav
 from dialect_service.pipeline_engine import get_pipeline_engine
+from fireredasr2s.dialect_pipeline.dialects import normalize_dialect_style
 
 
 def get_demo_capabilities() -> dict[str, Any]:
@@ -22,10 +23,13 @@ def run_pipeline_from_audio(
     voice: str = "Kiki",
     segment_max_len: int = 28,
     input_lang: str = "",
+    target_dialect: str = "yue",
+    dialect_style: str = "",
     voice_clone_enabled: bool = False,
     voice_clone_provider: str = "openvoice",
 ) -> dict[str, Any]:
     engine = get_pipeline_engine()
+    dialect_style = normalize_dialect_style(target_dialect, dialect_style)
     ref_frontend_mode = "clone_ref_vad_concat" if engine.cfg.reference_audio_strategy == "vad_concat" else "clone_ref_safe"
     work_dir = Path("runtime_data") / "web_demo_uploads"
     wav_path, meta = normalize_file_to_wav(audio_path, work_dir)
@@ -57,6 +61,8 @@ def run_pipeline_from_audio(
         voice=voice,
         voice_clone_enabled=voice_clone_enabled,
         speaker_ref_audio=str(ref_audio_path) if ref_audio_path else "",
+        target_dialect=target_dialect,
+        dialect_style=dialect_style,
     )
     result["source_audio"] = meta
     return result

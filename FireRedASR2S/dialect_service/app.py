@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
 from asr_service.audio_io import AudioNormalizeError, get_runtime_capabilities, make_temp_dir, normalize_file_to_wav, normalize_upload_to_wav
+from fireredasr2s.dialect_pipeline.dialects import is_supported_dialect, normalize_dialect_style, supported_dialect_codes
 
 from .pipeline_engine import get_pipeline_engine
 from .schemas import (
@@ -22,12 +23,19 @@ from .schemas import (
 app = FastAPI(title="Demo1 Dialect Service", version="0.1.0")
 
 
+def _validate_dialect(target_dialect: str, dialect_style: str = "") -> str:
+    if not is_supported_dialect(target_dialect):
+        supported = ", ".join(supported_dialect_codes())
+        raise HTTPException(status_code=400, detail=f"Unsupported dialect: {target_dialect}. Supported dialects: {supported}.")
+    return normalize_dialect_style(target_dialect, dialect_style)
+
+
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
     engine = get_pipeline_engine()
     return HealthResponse(
         status="ok",
-        supported_dialects=["yue"],
+        supported_dialects=supported_dialect_codes(),
         default_voice=engine.cfg.qwen_tts_voice,
         runtime={**engine.health(), **get_runtime_capabilities()},
     )
@@ -42,13 +50,19 @@ def review_text(req: ReviewRequest) -> ReviewResponse:
 
 @app.post("/api/v1/dialect/rewrite", response_model=RewriteResponse)
 def rewrite(req: RewriteRequest) -> RewriteResponse:
-    if req.target_dialect != "yue":
-        raise HTTPException(status_code=400, detail="Only yue is supported in Demo1.")
+    dialect_style = _validate_dialect(req.target_dialect, req.dialect_style)
     engine = get_pipeline_engine()
     engine.cfg.provider = req.provider
     engine.cfg.default_target_dialect = req.target_dialect
-    engine.cfg.default_dialect_style = req.dialect_style
-    result = engine.process_text(req.text, enable_rewrite=True, enable_tts=False, segment_max_len=req.segment_max_len)
+    engine.cfg.default_dialect_style = dialect_style
+    result = engine.process_text(
+        req.text,
+        enable_rewrite=True,
+        enable_tts=False,
+        segment_max_len=req.segment_max_len,
+        target_dialect=req.target_dialect,
+        dialect_style=dialect_style,
+    )
     return RewriteResponse(**result["rewrite"])
 
 
@@ -82,10 +96,15 @@ async def pipeline(
     segment_max_len: int = Form(default=28),
     voice: str = Form(default="Kiki"),
     input_lang: str = Form(default="zh"),
+    target_dialect: str = Form(default="yue"),
+    dialect_style: str = Form(default=""),
     voice_clone_enabled: bool = Form(default=False),
     voice_clone_provider: str = Form(default="openvoice"),
 ) -> PipelineResponse:
     engine = get_pipeline_engine()
+    dialect_style = _validate_dialect(target_dialect, dialect_style)
+    engine.cfg.default_target_dialect = target_dialect
+    engine.cfg.default_dialect_style = dialect_style
     engine.cfg.voice_conversion_provider = voice_clone_provider
     engine.cfg.voice_clone_provider = engine.cfg.text_clone_provider or "qwen_vc"
     ref_frontend_mode = "clone_ref_vad_concat" if engine.cfg.reference_audio_strategy == "vad_concat" else "clone_ref_safe"
@@ -129,6 +148,8 @@ async def pipeline(
                 voice=voice,
                 voice_clone_enabled=voice_clone_enabled,
                 speaker_ref_audio=ref_audio_path,
+                target_dialect=target_dialect,
+                dialect_style=dialect_style,
             )
             result["source_audio"] = meta
             return PipelineResponse(**result)
@@ -142,6 +163,8 @@ async def pipeline(
                 input_lang=input_lang,
                 voice_clone_enabled=voice_clone_enabled,
                 speaker_ref_audio=ref_audio_path,
+                target_dialect=target_dialect,
+                dialect_style=dialect_style,
             )
             return PipelineResponse(**result)
         raise HTTPException(status_code=400, detail="Either file or text is required.")

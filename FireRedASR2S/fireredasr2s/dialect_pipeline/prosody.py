@@ -53,15 +53,11 @@ def build_prosody_text(
 def apply_prosody_rules(text: str, *, target_dialect: str) -> tuple[str, list[dict[str, Any]]]:
     value = text.strip()
     hits: list[dict[str, Any]] = []
-    if target_dialect != "yue" or not value:
+    if not value:
         return value, hits
-    replacements = [
-        (r"如果(.+?)，就会", r"如果\1，咁就会", "如果...就会 -> 如果...咁就会"),
-        (r"如果(.+?)，就", r"如果\1，咁就", "如果...就 -> 如果...咁就"),
-        (r"搞到(.+?)，好难", r"搞到\1，之后就好难", "因果断点补连接"),
-        (r"然后", "跟住", "连接词更口语"),
-        (r"所以", "所以话", "连接词更顺口"),
-    ]
+    replacements = _prosody_replacements(target_dialect)
+    if not replacements:
+        return value, hits
     new_value = value
     for pattern, repl, note in replacements:
         updated, count = re.subn(pattern, repl, new_value)
@@ -69,6 +65,32 @@ def apply_prosody_rules(text: str, *, target_dialect: str) -> tuple[str, list[di
             new_value = updated
             hits.append({"pattern": pattern, "count": count, "category": "connector", "notes": note})
     return new_value, hits
+
+
+def _prosody_replacements(target_dialect: str) -> list[tuple[str, str, str]]:
+    if target_dialect == "yue":
+        return [
+            (r"如果(.+?)，就会", r"如果\1，咁就会", "如果...就会 -> 如果...咁就会"),
+            (r"如果(.+?)，就", r"如果\1，咁就", "如果...就 -> 如果...咁就"),
+            (r"搞到(.+?)，好难", r"搞到\1，之后就好难", "因果断点补连接"),
+            (r"然后", "跟住", "连接词更口语"),
+            (r"所以", "所以话", "连接词更顺口"),
+        ]
+    if target_dialect == "sichuan":
+        return [
+            (r"如果(.+?)，就会", r"要是\1，就会", "如果...就会 -> 要是...就会"),
+            (r"如果(.+?)，就", r"要是\1，就", "如果...就 -> 要是...就"),
+            (r"然后(?!嘛)", "然后嘛", "连接词更口语"),
+            (r"所以", "所以说嘛", "连接词更顺口"),
+        ]
+    if target_dialect == "minnan":
+        return [
+            (r"如果(.+?)，就会", r"若是\1，就会", "如果...就会 -> 若是...就会"),
+            (r"如果(.+?)，就", r"若是\1，就", "如果...就 -> 若是...就"),
+            (r"然后(?!阁)", "然后阁", "连接词更口语"),
+            (r"所以", "所以讲", "连接词更顺口"),
+        ]
+    return []
 
 
 def llm_prosody_rewrite(
@@ -124,6 +146,20 @@ def _prosody_system_prompt(target_dialect: str, dialect_style: str) -> str:
             "4) 不要过度堆砌语气词；"
                     "5) 对专名和已经修好的发音词面要保留，例如美斯、居里、一样，不要改回普通话写法；"
                     "6) 只输出最终可直接给 TTS 的文本。"
+        )
+    if target_dialect == "sichuan":
+        return (
+            "你是方言 TTS 韵律润色助手。任务不是改原意，而是把文本润成更适合四川话语音合成直接朗读的版本。"
+            "请重点处理句子之间的衔接、连接词、轻停顿和口语连贯性，让断点不要太生硬。"
+            "要求：保持原意，不加入新事实；可以微调连接词，例如“要是、然后嘛、所以说嘛、哈”等；"
+            "不要过度堆砌语气词；只输出最终可直接给 TTS 的文本。"
+        )
+    if target_dialect == "minnan":
+        return (
+            "你是方言 TTS 韵律润色助手。任务不是改原意，而是把文本润成更适合闽南语语音合成直接朗读的版本。"
+            "请重点处理句子之间的衔接、连接词、轻停顿和口语连贯性，让断点不要太生硬。"
+            "要求：保持原意，不加入新事实；可以微调连接词，例如“若是、然后阁、所以讲、啦”等；"
+            "不要过度堆砌语气词；只输出最终可直接给 TTS 的文本。"
         )
     return (
         "你是方言 TTS 韵律润色助手。请把文本改成更适合直接语音合成朗读的版本，"

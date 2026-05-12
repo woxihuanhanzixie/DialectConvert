@@ -8,6 +8,7 @@ from typing import Any
 
 from .config import Step2Config
 from .dialect_postprocess import postprocess_dialect_text
+from .dialects import dialect_label, normalize_dialect_style
 
 
 def rewrite_to_dialect(
@@ -17,6 +18,7 @@ def rewrite_to_dialect(
     target_dialect: str = "yue",
     dialect_style: str = "guangdong_general",
 ) -> dict[str, Any]:
+    dialect_style = normalize_dialect_style(target_dialect, dialect_style)
     payload = {
         "model": _model(cfg),
         "messages": [
@@ -55,10 +57,11 @@ def rewrite_to_dialect(
             if i < cfg.retry_count:
                 time.sleep(1 + i)
 
+    fallback_text = postprocess_dialect_text(text, target_dialect=target_dialect, dialect_style=dialect_style)
     return {
         "ok": False,
-        "yue_text": text,
-        "dialect_text": text,
+        "yue_text": fallback_text,
+        "dialect_text": fallback_text,
         "degrade_mode": True,
         "llm_model": _model(cfg),
         "llm_latency_ms": round((time.perf_counter() - t0) * 1000, 2),
@@ -112,6 +115,10 @@ def _model(cfg: Step2Config) -> str:
 def _rewrite_system_prompt(target_dialect: str, dialect_style: str) -> str:
     if target_dialect == "yue":
         return _yue_system_prompt(dialect_style)
+    if target_dialect == "sichuan":
+        return _sichuan_system_prompt(dialect_style)
+    if target_dialect == "minnan":
+        return _minnan_system_prompt(dialect_style)
     return (
         "你是方言改写助手。请把输入文本在不改变原意的前提下，重写成自然、顺口、适合直接配音的目标方言文本。"
         "允许顺句重写，但不要补充新信息。只输出最终文本。"
@@ -128,13 +135,7 @@ def _rewrite_user_prompt(text: str, *, target_dialect: str, dialect_style: str) 
 
 
 def _dialect_label(target_dialect: str, dialect_style: str) -> str:
-    if target_dialect == "yue":
-        if dialect_style == "hongkong_colloquial":
-            return "香港口语粤语书写文本"
-        if dialect_style == "formal_safe":
-            return "稳妥、易懂的粤语书写文本"
-        return "广东通用粤语书写文本"
-    return "目标方言文本"
+    return f"{dialect_label(target_dialect, dialect_style)}书写文本"
 
 
 def _yue_system_prompt(dialect_style: str) -> str:
@@ -157,4 +158,42 @@ def _yue_system_prompt(dialect_style: str) -> str:
         "粤语：呢排 AI 进步真系好快，俾开发者带嚟多咗唔少可能性。"
         "普通话：如果牙齿被虫蛀掉了，就会造成不可逆的损伤。"
         "粤语：如果啲牙畀虫蛀坏咗，搞到伤到根，就会好难补救。"
+    )
+
+
+def _sichuan_system_prompt(dialect_style: str) -> str:
+    _ = dialect_style
+    return (
+        "你是方言改写助手。你的任务不是逐字翻译，而是把普通话重写成自然、顺口、适合直接配音的四川话书写文本。"
+        "风格目标：以四川成都及川渝通用口语为基础，表达亲切、活泼、容易听懂，适合基础演示。"
+        "改写要求："
+        "1) 保留原意，可以在不改变事实的前提下调整句式、拆句、合句；"
+        "2) 优先使用常见四川话口语写法：啥子、咋个、啷个、莫、要得、巴适、安逸、晓得、整、搞快点、得不得；"
+        "3) 适度使用句尾词，例如噻、嘛、哈、哟、撒，但不要堆砌；"
+        "4) 避免普通话书面腔太重的直译，让文本读起来像自然口语；"
+        "5) 输出要适合直接 TTS 播报，当前只输出单一版本的最终文本，不要解释。"
+        "参考风格："
+        "普通话：这段时间 AI 的进步非常迅速，给开发者带来了更多可能。"
+        "四川话：这阵子 AI 进步硬是快得很，给开发者带来了更多可能噻。"
+        "普通话：如果牙齿被虫蛀掉了，就会造成不可逆的损伤。"
+        "四川话：要是牙齿遭虫蛀坏了，整到伤了根，就不好补救了哈。"
+    )
+
+
+def _minnan_system_prompt(dialect_style: str) -> str:
+    _ = dialect_style
+    return (
+        "你是方言改写助手。你的任务不是逐字翻译，而是把普通话重写成自然、顺口、适合直接配音的闽南语书写文本。"
+        "风格目标：以通俗易懂的闽南语口语表达为主，允许夹用常见汉字写法，优先服务基础演示和 TTS 可读性。"
+        "改写要求："
+        "1) 保留原意，可以在不改变事实的前提下调整句式、拆句、合句；"
+        "2) 优先使用常见闽南语口语写法：阮、汝、伊、毋、袂、欲、足、真正、有影、按呢、啥物、敢会；"
+        "3) 适度使用口语句尾，例如啦、咧、喔、咧讲，但不要堆砌；"
+        "4) 避免普通话书面腔太重的直译，让文本读起来更像自然口语；"
+        "5) 输出要适合直接 TTS 播报，当前只输出单一版本的最终文本，不要解释。"
+        "参考风格："
+        "普通话：这段时间 AI 的进步非常迅速，给开发者带来了更多可能。"
+        "闽南语：这阵仔 AI 进步真正足紧，予开发者带来阁较济可能啦。"
+        "普通话：如果牙齿被虫蛀掉了，就会造成不可逆的损伤。"
+        "闽南语：若是齿予虫蛀坏去，伤着齿根，就袂好补救喔。"
     )

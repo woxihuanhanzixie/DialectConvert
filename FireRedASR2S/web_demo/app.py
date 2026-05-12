@@ -17,6 +17,12 @@ from .view_models import (
     summarize_rows,
 )
 
+DIALECT_CHOICES = {
+    "粤语": ("yue", "guangdong_general"),
+    "四川话": ("sichuan", "sichuan_general"),
+    "闽南语": ("minnan", "minnan_general"),
+}
+
 
 def _resolve_route(tts: dict, route_name: str) -> dict:
     route = tts.get(route_name) or {}
@@ -78,12 +84,14 @@ def process_audio(
     enable_punc: bool,
     enable_tts: bool,
     voice: str,
+    target_dialect_label: str,
     segment_max_len: int,
     voice_clone_enabled: bool,
     voice_clone_provider: str,
 ):
     if not audio_path:
         raise gr.Error("请先上传音频或录音。")
+    target_dialect, dialect_style = DIALECT_CHOICES.get(target_dialect_label, DIALECT_CHOICES["粤语"])
     result = run_pipeline_from_audio(
         audio_path,
         speaker_ref_audio=speaker_ref_audio or "",
@@ -92,6 +100,8 @@ def process_audio(
         enable_tts=enable_tts,
         voice=voice,
         segment_max_len=segment_max_len,
+        target_dialect=target_dialect,
+        dialect_style=dialect_style,
         voice_clone_enabled=voice_clone_enabled,
         voice_clone_provider=voice_clone_provider,
     )
@@ -240,8 +250,8 @@ def load_eval_panel():
 
 def build_demo() -> gr.Blocks:
     caps = get_demo_capabilities()
-    with gr.Blocks(title="Demo1 粤语语音演示") as demo:
-        gr.Markdown("# Demo1 粤语语音网页演示")
+    with gr.Blocks(title="Demo1 多方言语音演示") as demo:
+        gr.Markdown("# Demo1 多方言语音网页演示")
         gr.Markdown(
             f"当前支持上传格式：`{', '.join(caps['supported_upload_exts'])}`  \n"
             f"FFmpeg 可用：`{caps['ffmpeg_available']}`  \n"
@@ -270,7 +280,12 @@ def build_demo() -> gr.Blocks:
                             value="openvoice",
                             label="音色转换 Provider",
                         )
-                        voice = gr.Dropdown(choices=["Kiki", "Rocky"], value="Kiki", label="粤语音色")
+                        voice = gr.Dropdown(choices=["Kiki", "Rocky"], value="Kiki", label="方言音色")
+                        target_dialect = gr.Dropdown(
+                            choices=list(DIALECT_CHOICES),
+                            value="粤语",
+                            label="目标方言",
+                        )
                         segment_max_len = gr.Slider(16, 48, value=28, step=1, label="分段长度")
                         run_btn = gr.Button("开始转换", variant="primary")
                     with gr.Column(scale=1):
@@ -305,7 +320,17 @@ def build_demo() -> gr.Blocks:
 
                 run_btn.click(
                     process_audio,
-                    inputs=[input_audio, speaker_ref_audio, enable_punc, enable_tts, voice, segment_max_len, voice_clone_enabled, voice_clone_provider],
+                    inputs=[
+                        input_audio,
+                        speaker_ref_audio,
+                        enable_punc,
+                        enable_tts,
+                        voice,
+                        target_dialect,
+                        segment_max_len,
+                        voice_clone_enabled,
+                        voice_clone_provider,
+                    ],
                     outputs=[
                         asr_text,
                         reviewed_text,
@@ -335,7 +360,7 @@ def build_demo() -> gr.Blocks:
             with gr.Tab("结果评估页"):
                 stats_md = gr.Markdown()
                 eval_table = gr.Dataframe(
-                    headers=["uttid", "source_text", "yue_text", "tts_status", "tts_wav_path"],
+                    headers=["uttid", "source_text", "dialect_text", "tts_status", "tts_wav_path"],
                     interactive=False,
                     wrap=True,
                 )
