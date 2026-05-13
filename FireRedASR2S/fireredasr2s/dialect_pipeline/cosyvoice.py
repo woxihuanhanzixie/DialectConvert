@@ -197,7 +197,6 @@ def stream_cosyvoice_websocket(
                     "rate": 1,
                     "pitch": 1,
                     "enable_ssml": False,
-                    "instruction": instruction,
                 },
                 "input": {},
             },
