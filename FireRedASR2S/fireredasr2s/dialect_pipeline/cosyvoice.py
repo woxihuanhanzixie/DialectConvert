@@ -112,17 +112,14 @@ def synthesize_cosyvoice_http(
         "input": {
             "text": cleaned,
             "voice": voice,
-        },
-        "parameters": {
             "format": cfg.cosyvoice_audio_format,
             "sample_rate": cfg.cosyvoice_sample_rate,
-            "instruction": instruction,
         },
     }
     started_at = time.perf_counter()
     try:
         raw = _post_json(
-            f"{cfg.cosyvoice_base_url}/services/aigc/multimodal-generation/generation",
+            f"{cfg.cosyvoice_base_url}/services/audio/tts/SpeechSynthesizer",
             payload,
             cfg.qwen_tts_api_key,
             cfg.timeout_s,
@@ -170,10 +167,12 @@ def stream_cosyvoice_websocket(
     cleaned = clean_realtime_speech_text(text)
     if not cleaned:
         raise RuntimeError("Missing text for CosyVoice realtime synthesis.")
+    if not cfg.qwen_tts_api_key:
+        raise RuntimeError("Missing DASHSCOPE_API_KEY or QWEN_TTS_API_KEY for CosyVoice realtime synthesis.")
     instruction = cosyvoice_instruction(target_dialect)
     task_id = str(uuid.uuid4())
     headers = [
-        f"Authorization: Bearer {cfg.qwen_tts_api_key}",
+        f"Authorization: bearer {cfg.qwen_tts_api_key}",
         "X-DashScope-DataInspection: enable",
     ]
     ws = websocket.create_connection(cfg.cosyvoice_ws_url, header=headers, timeout=max(10, cfg.timeout_s))
@@ -205,6 +204,18 @@ def stream_cosyvoice_websocket(
         }
         ws.send(json.dumps(run_task, ensure_ascii=False))
         send_event({"type": "cosyvoice_started", "task_id": task_id, "model": cfg.cosyvoice_target_model})
+        while True:
+            message = ws.recv()
+            if isinstance(message, bytes):
+                send_audio(message)
+                continue
+            payload = _json_or_text(message)
+            send_event({"type": "cosyvoice_event", "payload": payload})
+            if _event_name(payload) == "task-started":
+                break
+            if _is_terminal_event(payload):
+                raise RuntimeError(f"CosyVoice task ended before text was sent: {payload}")
+
         ws.send(json.dumps({"header": {"action": "continue-task", "task_id": task_id}, "payload": {"input": {"text": cleaned}}}, ensure_ascii=False))
         ws.send(json.dumps({"header": {"action": "finish-task", "task_id": task_id}, "payload": {"input": {}}}, ensure_ascii=False))
 
@@ -360,8 +371,11 @@ def _json_or_text(message: str) -> Any:
 
 
 def _is_terminal_event(payload: Any) -> bool:
+    return _event_name(payload) in {"task-finished", "task-failed", "task-canceled", "task-ended"}
+
+
+def _event_name(payload: Any) -> str:
     if not isinstance(payload, dict):
-        return False
+        return ""
     header = payload.get("header") or {}
-    event = str(header.get("event") or header.get("status") or "").lower()
-    return event in {"task-finished", "task-failed", "task-canceled", "task-ended"}
+    return str(header.get("event") or header.get("status") or "").lower()

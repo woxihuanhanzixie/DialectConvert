@@ -33,17 +33,9 @@ const els = {
 };
 
 const API_BASE = (() => {
-  if (window.__APP_API_BASE__) {
-    return String(window.__APP_API_BASE__).replace(/\/$/, "");
-  }
-  if (window.location.protocol === "file:") {
-    return "http://127.0.0.1:8002";
-  }
-  if (
-    ["127.0.0.1", "localhost"].includes(window.location.hostname) &&
-    window.location.port &&
-    window.location.port !== "8002"
-  ) {
+  if (window.__APP_API_BASE__) return String(window.__APP_API_BASE__).replace(/\/$/, "");
+  if (window.location.protocol === "file:") return "http://127.0.0.1:8002";
+  if (["127.0.0.1", "localhost"].includes(window.location.hostname) && window.location.port && window.location.port !== "8002") {
     return "http://127.0.0.1:8002";
   }
   if (window.location.port && window.location.port !== "8002") {
@@ -57,41 +49,63 @@ function setStatus(message, state) {
   els.statusText.className = `status ${state}`;
 }
 
-function routeLabel(value) {
-  const labels = {
-    cloned_dialect: "声音复刻方言音频",
-    gold_teacher: "Gold Teacher 参考音频",
-    voice_matched: "Voice Matched",
-    baseline: "Gold Teacher 参考音频",
-    clone: "声音复刻方言音频",
-    legacy_text_clone: "声音复刻方言音频",
-  };
-  return labels[value] || value || "Gold Teacher 参考音频";
+function resetOutputs() {
+  els.recommendedOutput.textContent = "生成中";
+  els.totalLatency.textContent = "-";
+  els.traceId.textContent = "-";
+  els.errorText.textContent = "无错误";
+  els.clonedAudio.removeAttribute("src");
+  els.clonedAudio.load();
+  els.clonedDownload.classList.add("hidden");
+  els.goldAudio.removeAttribute("src");
+  els.goldAudio.load();
+  els.goldDownload.classList.add("hidden");
+  els.asrText.textContent = "-";
+  els.reviewedText.textContent = "-";
+  els.semanticText.textContent = "-";
+  els.pronunciationText.textContent = "-";
+  els.prosodyText.textContent = "-";
+  els.culturalCards.textContent = "-";
+  updateStats({});
 }
 
-function setAudioCard(audioEl, linkEl, noteEl, route, emptyMessage) {
-  const audioUrl = route?.audio_url || "";
-  if (audioUrl) {
-    audioEl.src = audioUrl;
-    linkEl.href = audioUrl;
-    linkEl.classList.remove("hidden");
-    noteEl.textContent = route?.route_reason || "已生成。";
-    return;
+async function checkHealth() {
+  try {
+    const resp = await fetch(`${API_BASE}/healthz`, { method: "GET" });
+    if (!resp.ok) throw new Error("healthz failed");
+    const payload = await resp.json();
+    const runtime = payload.runtime || {};
+    els.serviceStatus.textContent = `服务在线 · ${runtime.cosyvoice_target_model || payload.default_voice || "CosyVoice"}`;
+    els.serviceStatus.className = "status-pill ok";
+  } catch {
+    els.serviceStatus.textContent = "服务未连接";
+    els.serviceStatus.className = "status-pill bad";
   }
-  audioEl.removeAttribute("src");
-  audioEl.load();
-  linkEl.removeAttribute("href");
-  linkEl.classList.add("hidden");
-  noteEl.textContent = route?.error || route?.fallback_reason || emptyMessage;
 }
 
 function readJsonError(payload) {
   if (!payload) return "请求失败";
   if (typeof payload.detail === "string") return payload.detail;
-  if (Array.isArray(payload.detail)) {
-    return payload.detail.map((item) => item.msg || JSON.stringify(item)).join("；");
-  }
+  if (Array.isArray(payload.detail)) return payload.detail.map((item) => item.msg || JSON.stringify(item)).join("；");
   return "请求失败";
+}
+
+function routeLabel(value) {
+  const labels = {
+    cosyvoice_realtime: "CosyVoice 实时方言语音",
+    cosyvoice_fallback: "CosyVoice 非实时兜底音频",
+    cloned_dialect: "CosyVoice 方言音频",
+  };
+  return labels[value] || value || "CosyVoice 实时方言语音";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function renderCulturalCards(cards) {
@@ -121,178 +135,186 @@ function renderCulturalCards(cards) {
     .join("");
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function hitCount(items) {
   if (!Array.isArray(items)) return 0;
   return items.reduce((total, item) => total + Math.max(1, Number(item?.count || 0) || 0), 0);
 }
 
-function pickFirstNumber(...values) {
-  for (const value of values) {
-    if (value === null || value === undefined || value === "") continue;
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) return numeric;
-  }
-  return null;
-}
-
-function ragHits(rewrite) {
-  const hits = [];
-  for (const key of ["rag_hits", "pronunciation_rag_hits"]) {
-    if (Array.isArray(rewrite?.[key])) hits.push(...rewrite[key]);
-  }
-  return hits;
-}
-
-function formatPercent(value) {
-  if (!Number.isFinite(value)) return "-";
-  const normalized = value <= 1 ? value * 100 : value;
-  return `${normalized.toFixed(normalized >= 10 ? 1 : 2)}%`;
-}
-
-function formatMs(value) {
-  if (!Number.isFinite(value)) return "-";
-  return `${Math.round(value)} ms`;
-}
-
 function updateStats(rewrite) {
-  const pronCount = hitCount(rewrite?.pronunciation_rule_hits);
-  const prosodyCount = hitCount(rewrite?.prosody_rule_hits);
-  const hits = ragHits(rewrite || {});
-  const ragCount = hits.length;
-  const queryCount = pickFirstNumber(
-    rewrite?.rag_query_count,
-    rewrite?.pronunciation_rag_query_count,
-    rewrite?.rag_total
-  );
-  const explicitRate = pickFirstNumber(
-    rewrite?.rag_hit_rate,
-    rewrite?.pronunciation_rag_hit_rate,
-    rewrite?.rag_recall_rate
-  );
-  const latency = pickFirstNumber(rewrite?.rag_latency_ms, rewrite?.pronunciation_rag_latency_ms, rewrite?.rag_elapsed_ms);
-  let similarity = pickFirstNumber(rewrite?.rag_semantic_similarity, rewrite?.rag_avg_similarity, rewrite?.rag_top_score);
-  if (similarity === null) {
-    const scores = hits
-      .map((hit) => pickFirstNumber(hit?.semantic_similarity, hit?.similarity, hit?.score))
-      .filter((value) => value !== null);
-    if (scores.length) similarity = Math.max(...scores);
-  }
-
-  els.pronHitCount.textContent = String(pronCount);
-  els.prosodyHitCount.textContent = String(prosodyCount);
-  els.finalHitCount.textContent = String(pronCount + prosodyCount + ragCount);
-  if (explicitRate !== null) {
-    els.ragHitRate.textContent = formatPercent(explicitRate);
-  } else if (queryCount !== null && queryCount > 0) {
-    els.ragHitRate.textContent = formatPercent(ragCount / queryCount);
-  } else {
-    els.ragHitRate.textContent = ragCount > 0 ? "已命中" : "未启用";
-  }
-  els.ragLatency.textContent = formatMs(latency);
-  els.ragSimilarity.textContent = similarity === null ? "-" : formatPercent(similarity);
+  els.finalHitCount.textContent = Array.isArray(rewrite?.cultural_cards) ? rewrite.cultural_cards.length : 0;
+  els.pronHitCount.textContent = hitCount(rewrite?.pronunciation_rule_hits);
+  els.prosodyHitCount.textContent = hitCount(rewrite?.prosody_rule_hits);
+  els.ragHitRate.textContent = "未启用";
+  els.ragLatency.textContent = "-";
+  els.ragSimilarity.textContent = "-";
 }
 
-function resetOutputs() {
-  els.recommendedOutput.textContent = "生成中";
-  els.totalLatency.textContent = "-";
-  els.traceId.textContent = "-";
-  els.errorText.textContent = "无错误";
-  updateStats({});
-}
-
-async function checkHealth() {
-  try {
-    const resp = await fetch(`${API_BASE}/healthz`, { method: "GET" });
-    if (!resp.ok) throw new Error("healthz failed");
-    const payload = await resp.json();
-    els.serviceStatus.textContent = `服务在线 · ${payload.default_voice || "Kiki"}`;
-    els.serviceStatus.className = "status-pill ok";
-  } catch {
-    els.serviceStatus.textContent = "服务未连接";
-    els.serviceStatus.className = "status-pill bad";
-  }
-}
-
-async function submitPipeline(event) {
-  event.preventDefault();
+function buildForm() {
   const mainAudio = els.inputAudio.files?.[0];
   const speakerRefAudio = els.speakerRefAudio.files?.[0];
   const inputText = els.inputText.value.trim();
   if (!mainAudio && !inputText) {
-    setStatus("请上传主音频或输入文本。", "error");
-    return;
+    throw new Error("请上传主音频或输入文本。");
   }
-
   const [targetDialect, dialectStyle] = els.targetDialect.value.split(":");
   const form = new FormData();
   if (mainAudio) form.append("file", mainAudio);
   if (speakerRefAudio) form.append("speaker_ref_audio", speakerRefAudio);
   if (inputText) form.append("text", inputText);
   form.append("enable_punc", "true");
-  form.append("enable_rewrite", "true");
-  form.append("enable_tts", "true");
-  form.append("segment_max_len", "28");
-  form.append("voice", els.voice.value);
   form.append("target_dialect", targetDialect);
   form.append("dialect_style", dialectStyle);
   form.append("voice_clone_enabled", speakerRefAudio ? "true" : "false");
-  form.append("voice_clone_provider", speakerRefAudio ? "qwen_voice_clone" : "none");
+  form.append("voice_clone_provider", "cosyvoice");
+  return { form, mainAudio, speakerRefAudio };
+}
 
+function renderSession(session, mainAudio) {
+  els.recommendedOutput.textContent = routeLabel("cosyvoice_realtime");
+  els.traceId.textContent = session.trace_id || "-";
+  els.asrText.textContent = session.asr?.punc_text || session.asr?.text || (mainAudio ? "-" : "文本输入，无 ASR");
+  els.reviewedText.textContent = session.speech_text || "-";
+  els.semanticText.textContent = session.speech_text || "-";
+  els.pronunciationText.textContent = session.instruction || "-";
+  els.prosodyText.textContent = "CosyVoice v3-flash 实时合成，不等待 LLM 韵律层。";
+  els.culturalCards.textContent = "-";
+  updateStats({});
+  els.clonedNote.textContent = session.voice_cache_hit ? "已复用 CosyVoice 专属音色，正在实时播放。" : "CosyVoice v3-flash 正在实时播放。";
+  els.goldNote.textContent = "当前公网主链路不再使用 Gold Teacher。";
+}
+
+function websocketUrl(url) {
+  if (url) return url;
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const base = API_BASE || `${window.location.protocol}//${window.location.host}`;
+  return base.replace(/^https?:/, proto);
+}
+
+async function playRealtime(session) {
+  if (!("MediaSource" in window) || !MediaSource.isTypeSupported("audio/mpeg")) {
+    throw new Error("当前浏览器不支持 MP3 流式播放。");
+  }
+  const mediaSource = new MediaSource();
+  const chunks = [];
+  let sourceBuffer = null;
+  let opened = false;
+  let finished = false;
+  const startedAt = performance.now();
+  const objectUrl = URL.createObjectURL(mediaSource);
+  els.clonedAudio.src = objectUrl;
+  els.clonedAudio.play().catch(() => {});
+
+  function pump() {
+    if (!sourceBuffer || sourceBuffer.updating || chunks.length === 0) return;
+    sourceBuffer.appendBuffer(chunks.shift());
+  }
+
+  mediaSource.addEventListener("sourceopen", () => {
+    opened = true;
+    sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
+    sourceBuffer.addEventListener("updateend", () => {
+      pump();
+      if (finished && chunks.length === 0 && !sourceBuffer.updating && mediaSource.readyState === "open") {
+        mediaSource.endOfStream();
+      }
+    });
+    pump();
+  });
+
+  const streamUrl = websocketUrl(session.stream_url);
+  const ws = new WebSocket(streamUrl);
+  ws.binaryType = "arraybuffer";
+
+  await new Promise((resolve, reject) => {
+    ws.onopen = () => setStatus("CosyVoice 已连接，等待首个音频片段...", "loading");
+    ws.onerror = () => reject(new Error("实时 WebSocket 连接失败。"));
+    ws.onmessage = (event) => {
+      if (typeof event.data === "string") {
+        let payload = {};
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          payload = { type: "message", message: event.data };
+        }
+        if (payload.type === "error") {
+          reject(new Error(payload.message || "实时合成失败。"));
+        }
+        if (payload.type === "done") {
+          finished = true;
+          els.totalLatency.textContent = `${Math.round(performance.now() - startedAt)} ms`;
+          setStatus("实时播放完成。", "success");
+          resolve();
+        }
+        return;
+      }
+      chunks.push(event.data);
+      if (opened) pump();
+      if (els.clonedAudio.paused) els.clonedAudio.play().catch(() => {});
+      setStatus("正在实时播放 CosyVoice 方言语音...", "loading");
+    };
+    ws.onclose = () => {
+      finished = true;
+      if (!sourceBuffer && chunks.length === 0) reject(new Error("实时连接关闭，未收到音频。"));
+    };
+  });
+}
+
+async function runFallbackPipeline(form) {
+  setStatus("实时播放不可用，正在生成非实时兜底音频...", "loading");
+  form.set("enable_rewrite", "false");
+  form.set("enable_tts", "true");
+  form.set("segment_max_len", "28");
+  const resp = await fetch(`${API_BASE}/api/v1/dialect/pipeline`, { method: "POST", body: form });
+  const payload = await resp.json();
+  if (!resp.ok) throw new Error(readJsonError(payload));
+  const tts = payload.tts || {};
+  const route = tts.cosyvoice_fallback || tts.cloned_dialect || tts.voice_matched || {};
+  const audioUrl = route.audio_url || tts.audio_url || "";
+  if (!audioUrl) throw new Error(route.error || tts.error || "非实时兜底音频未生成。");
+  els.clonedAudio.src = audioUrl;
+  els.clonedDownload.href = audioUrl;
+  els.clonedDownload.classList.remove("hidden");
+  els.clonedNote.textContent = route.route_reason || "已生成 CosyVoice 非实时兜底音频。";
+  els.recommendedOutput.textContent = routeLabel(tts.recommended_main_output || "cosyvoice_fallback");
+  els.totalLatency.textContent = `${Math.round(payload.total_latency_ms || 0)} ms`;
+  els.traceId.textContent = payload.trace_id || els.traceId.textContent;
+  setStatus("非实时兜底音频已生成。", "success");
+}
+
+async function submitPipeline(event) {
+  event.preventDefault();
+  const startedAt = performance.now();
+  let built;
+  try {
+    built = buildForm();
+  } catch (error) {
+    setStatus(error.message, "error");
+    return;
+  }
   els.submitBtn.disabled = true;
   resetOutputs();
-  setStatus(speakerRefAudio ? "正在生成复刻方言语音..." : "正在生成 Gold Teacher 参考音频...", "loading");
+  setStatus("正在准备 CosyVoice 实时会话...", "loading");
 
   try {
-    const resp = await fetch(`${API_BASE}/api/v1/dialect/pipeline`, {
+    const resp = await fetch(`${API_BASE}/api/v1/dialect/realtime-session`, {
       method: "POST",
-      body: form,
+      body: built.form,
     });
-    const payload = await resp.json();
-    if (!resp.ok) throw new Error(readJsonError(payload));
-
-    const tts = payload.tts || {};
-    const goldTeacher = tts.gold_teacher || {};
-    const clonedDialect = tts.cloned_dialect || tts.legacy_text_clone || {};
-    const asr = payload.asr || {};
-    const review = payload.review || {};
-    const rewrite = payload.rewrite || {};
-
-    els.recommendedOutput.textContent = routeLabel(tts.recommended_main_output);
-    els.totalLatency.textContent = `${Math.round(payload.total_latency_ms || 0)} ms`;
-    els.traceId.textContent = payload.trace_id || "-";
-    const cloneError = clonedDialect.error || "";
-    const cloneFallback = clonedDialect.fallback_reason || "";
-    els.errorText.textContent = cloneError || goldTeacher.error || (speakerRefAudio && cloneFallback ? cloneFallback : "无错误");
-    els.asrText.textContent = asr.punc_text || asr.text || (mainAudio ? "-" : "文本输入，无 ASR");
-    els.reviewedText.textContent = review.asr_reviewed_text || "-";
-    els.semanticText.textContent = rewrite.semantic_text || rewrite.dialect_text || "-";
-    els.pronunciationText.textContent = rewrite.pronunciation_text || "-";
-    els.prosodyText.textContent = rewrite.prosody_text || "-";
-    els.culturalCards.innerHTML = renderCulturalCards(rewrite.cultural_cards);
-    updateStats(rewrite);
-
-    setAudioCard(
-      els.clonedAudio,
-      els.clonedDownload,
-      els.clonedNote,
-      clonedDialect,
-      speakerRefAudio ? "声音复刻方言音频暂未生成。" : "未上传音色参考音频，未执行声音复刻。"
-    );
-    setAudioCard(els.goldAudio, els.goldDownload, els.goldNote, goldTeacher, "Gold Teacher 参考音频暂未生成。");
-    setStatus("处理完成。", "success");
+    const session = await resp.json();
+    if (!resp.ok) throw new Error(readJsonError(session));
+    renderSession(session, built.mainAudio);
+    await playRealtime(session);
+    els.totalLatency.textContent = `${Math.round(performance.now() - startedAt)} ms`;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "请求失败";
+    const message = error instanceof Error ? error.message : "实时链路失败。";
     els.errorText.textContent = message;
-    setStatus(message, "error");
+    try {
+      await runFallbackPipeline(built.form);
+    } catch (fallbackError) {
+      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "请求失败";
+      els.errorText.textContent = `${message} ${fallbackMessage}`;
+      setStatus(fallbackMessage, "error");
+    }
   } finally {
     els.submitBtn.disabled = false;
   }
