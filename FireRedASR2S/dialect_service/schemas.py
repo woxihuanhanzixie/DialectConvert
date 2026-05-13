@@ -28,20 +28,6 @@ class RewriteRequest(BaseModel):
     segment_max_len: int = 28
 
 
-class CulturalKnowledgeCardResponse(BaseModel):
-    id: str
-    target_dialect: str
-    term: str
-    aliases: list[str] = Field(default_factory=list)
-    matched_terms: list[str] = Field(default_factory=list)
-    meaning: str = ""
-    cultural_note: str = ""
-    usage_example: str = ""
-    speech_register: str = Field(default="", alias="register")
-    source_label: str = ""
-    source_url: str = ""
-
-
 class RewriteResponse(BaseModel):
     source_text: str
     tn_text: str
@@ -60,8 +46,6 @@ class RewriteResponse(BaseModel):
     prosody_hit_categories: list[str] = Field(default_factory=list)
     prosody_fallback_used: bool = False
     prosody_notes: str = ""
-    cultural_cards: list[CulturalKnowledgeCardResponse] = Field(default_factory=list)
-    cultural_card_terms: list[str] = Field(default_factory=list)
     degrade_mode: bool
     llm_model: str
     llm_latency_ms: float
@@ -78,11 +62,9 @@ class TtsRequest(BaseModel):
     voice: str = "Kiki"
     model: str = "qwen3-tts-flash"
     language_type: str = "Chinese"
-    target_dialect: str = "yue"
-    dialect_style: str = ""
     voice_clone_enabled: bool = False
     speaker_ref_audio: str = ""
-    voice_clone_provider: str = "openvoice"
+    voice_clone_provider: str = "qwen_voice_clone"
     clone_mode: str = "api_first"
     speaker_similarity_priority: str = "high"
     tts_fluency_mode: str = "allow_rate_adjust"
@@ -96,7 +78,6 @@ class TtsRouteResponse(BaseModel):
     expires_at: str = ""
     tts_model: str = ""
     tts_voice: str = ""
-    voice_id: str = ""
     latency_ms: float = 0.0
     error: str = ""
     input_text: str = ""
@@ -113,11 +94,6 @@ class TtsRouteResponse(BaseModel):
     tts_fluency_mode: str = "allow_rate_adjust"
     tts_style_instructions: str = ""
     instruction_mode_active: bool = False
-    teacher_input_text: str = ""
-    teacher_input_mode: str = "semantic_text"
-    teacher_style_instruction: str = ""
-    reference_audio_validation: dict[str, Any] = Field(default_factory=dict)
-    voice_cache_hit: bool = False
 
 
 class GapSummaryResponse(BaseModel):
@@ -162,9 +138,6 @@ class TtsResponse(BaseModel):
     instruction_mode_active: bool = False
     tts_input_text: str = ""
     tts_input_mode: str = "semantic_text"
-    teacher_input_text: str = ""
-    teacher_input_mode: str = "semantic_text"
-    teacher_style_instruction: str = ""
     audio_meta: dict[str, Any] | None = None
     baseline_wav_path: str = ""
     baseline_audio_url: str = ""
@@ -179,11 +152,8 @@ class TtsResponse(BaseModel):
     gap_summary: GapSummaryResponse | None = None
     gold_teacher: TtsRouteResponse | None = None
     voice_matched: TtsRouteResponse | None = None
-    cloned_dialect: TtsRouteResponse | None = None
-    qwen_cloned_dialect: TtsRouteResponse | None = None
-    cosyvoice_fallback: TtsRouteResponse | None = None
     legacy_text_clone: TtsRouteResponse | None = None
-    recommended_main_output: str = "qwen_cloned_dialect"
+    recommended_main_output: str = "gold_teacher"
     voice_match_summary: VoiceMatchSummaryResponse | None = None
     timbre_ref_audio: str = ""
     prosody_ref_audio: str = ""

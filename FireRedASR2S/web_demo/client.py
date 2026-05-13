@@ -46,7 +46,7 @@ def run_pipeline_from_audio(
     target_dialect: str = "yue",
     dialect_style: str = "",
     voice_clone_enabled: bool = False,
-    voice_clone_provider: str = "openvoice",
+    voice_clone_provider: str = "qwen_voice_clone",
 ) -> dict[str, Any]:
     engine = get_pipeline_engine()
     asr_cfg = AsrServiceConfig.from_env()
