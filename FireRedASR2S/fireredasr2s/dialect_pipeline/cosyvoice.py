@@ -116,6 +116,8 @@ def synthesize_cosyvoice_http(
             "sample_rate": cfg.cosyvoice_sample_rate,
         },
     }
+    if _supports_freeform_instruction(voice, cfg):
+        payload["input"]["instruction"] = instruction
     started_at = time.perf_counter()
     try:
         raw = _post_json(
@@ -177,6 +179,18 @@ def stream_cosyvoice_websocket(
     ]
     ws = websocket.create_connection(cfg.cosyvoice_ws_url, header=headers, timeout=max(10, cfg.timeout_s))
     try:
+        parameters = {
+            "text_type": "PlainText",
+            "voice": voice,
+            "format": cfg.cosyvoice_audio_format,
+            "sample_rate": cfg.cosyvoice_sample_rate,
+            "volume": 50,
+            "rate": 1,
+            "pitch": 1,
+            "enable_ssml": False,
+        }
+        if _supports_freeform_instruction(voice, cfg):
+            parameters["instruction"] = instruction
         run_task = {
             "header": {
                 "action": "run-task",
@@ -188,16 +202,7 @@ def stream_cosyvoice_websocket(
                 "task": "tts",
                 "function": "SpeechSynthesizer",
                 "model": cfg.cosyvoice_target_model,
-                "parameters": {
-                    "text_type": "PlainText",
-                    "voice": voice,
-                    "format": cfg.cosyvoice_audio_format,
-                    "sample_rate": cfg.cosyvoice_sample_rate,
-                    "volume": 50,
-                    "rate": 1,
-                    "pitch": 1,
-                    "enable_ssml": False,
-                },
+                "parameters": parameters,
                 "input": {},
             },
         }
@@ -215,8 +220,8 @@ def stream_cosyvoice_websocket(
             if _is_terminal_event(payload):
                 raise RuntimeError(f"CosyVoice task ended before text was sent: {payload}")
 
-        ws.send(json.dumps({"header": {"action": "continue-task", "task_id": task_id}, "payload": {"input": {"text": cleaned}}}, ensure_ascii=False))
-        ws.send(json.dumps({"header": {"action": "finish-task", "task_id": task_id}, "payload": {"input": {}}}, ensure_ascii=False))
+        ws.send(json.dumps({"header": {"action": "continue-task", "task_id": task_id, "streaming": "duplex"}, "payload": {"input": {"text": cleaned}}}, ensure_ascii=False))
+        ws.send(json.dumps({"header": {"action": "finish-task", "task_id": task_id, "streaming": "duplex"}, "payload": {"input": {}}}, ensure_ascii=False))
 
         while True:
             message = ws.recv()
@@ -344,6 +349,11 @@ def _sanitize_prefix(prefix: str) -> str:
     if not value[0].isalpha():
         value = f"demo{value}"
     return value[:12]
+
+
+def _supports_freeform_instruction(voice: str, cfg: Step2Config) -> bool:
+    system_voice = (cfg.cosyvoice_system_voice or "").strip()
+    return bool(voice and voice != system_voice)
 
 
 def _error_result(error: str, cfg: Step2Config, voice: str) -> dict[str, Any]:
