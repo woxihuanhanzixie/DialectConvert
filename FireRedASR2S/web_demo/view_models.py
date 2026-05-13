@@ -8,6 +8,10 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
     route = tts.get(route_name) or {}
     if route:
         return route
+    if route_name == "qwen_cloned_dialect":
+        route = tts.get("qwen_cloned_dialect") or tts.get("cloned_dialect") or tts.get("voice_matched") or tts.get("clone") or {}
+        if route:
+            return route
     if route_name in {"baseline", "gold_teacher"}:
         return {
             "route_name": "gold_teacher",
@@ -20,18 +24,18 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
             "route_reason": "Gold Teacher 作为系统方言发音参考的兼容回退结果。",
         }
     return {
-        "route_name": "voice_matched",
+        "route_name": "qwen_cloned_dialect",
         "wav_path": "",
         "tts_model": "",
         "tts_voice": "",
         "error": "",
         "input_text": "",
-        "input_mode": "teacher_audio_to_audio",
+        "input_mode": "clean_dialect_text",
         "voice_clone_enabled": False,
         "voice_clone_provider": "",
         "speaker_similarity_priority": "high",
         "tts_fluency_mode": "allow_rate_adjust",
-        "route_reason": "Voice Matched 结果尚未生成。",
+        "route_reason": "Qwen Voice Copy 结果尚未生成。",
     }
 
 
@@ -67,18 +71,22 @@ def build_eval_table(rows: list[dict[str, Any]]) -> list[list[Any]]:
 def _route_label(route_name: str) -> str:
     return {
         "gold_teacher": "Gold Teacher",
-        "voice_matched": "Voice Matched",
+        "voice_matched": "最终方言克隆",
+        "qwen_cloned_dialect": "最终方言克隆",
+        "cloned_dialect": "最终方言克隆",
         "baseline": "Gold Teacher",
-        "clone": "Voice Matched",
+        "clone": "最终方言克隆",
     }.get(route_name, route_name or "未知链路")
 
 
 def _recommended_route_label(route_name: str) -> str:
     return {
         "gold_teacher": "Gold Teacher 方言音频",
-        "voice_matched": "Voice Matched 音色迁移音频",
+        "voice_matched": "最终方言克隆音频",
+        "qwen_cloned_dialect": "最终方言克隆音频",
+        "cloned_dialect": "最终方言克隆音频",
         "baseline": "Gold Teacher 方言音频",
-        "clone": "Voice Matched 音色迁移音频",
+        "clone": "最终方言克隆音频",
     }.get(route_name, route_name or "未知音频")
 
 
@@ -90,6 +98,9 @@ def _input_mode_label(mode: str) -> str:
         "pronunciation_text": "发音转写文本",
         "prosody_text": "韵律润色文本",
         "teacher_audio_to_audio": "Gold Teacher 音频到音频",
+        "clean_dialect_text": "清洗后的方言口语文本",
+        "clean_semantic_text": "清洗后的语义口语文本",
+        "clean_review_text": "清洗后的审查文本",
         "dialect_text_with_cloned_voice": "方言文本 + 复刻音色",
         "semantic_text_with_cloned_voice": "Qwen Text Clone 对照项",
     }.get(mode, mode or "未知")
@@ -292,18 +303,17 @@ def build_recommendation_markdown(result: dict[str, Any]) -> str:
     gap_summary = tts.get("gap_summary") or {}
     voice_match_summary = tts.get("voice_match_summary") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
-    voice_matched_route = _resolve_route(tts, "voice_matched")
-    recommended_route = tts.get("recommended_main_output") or gap_summary.get("recommended_route") or "gold_teacher"
+    voice_matched_route = _resolve_route(tts, "qwen_cloned_dialect")
+    recommended_route = tts.get("recommended_main_output") or gap_summary.get("recommended_route") or "qwen_cloned_dialect"
     return "\n".join(
         [
             build_result_stats_markdown(result),
             "### 试听建议",
             f"- 推荐先听：{_recommended_route_label(recommended_route)}",
-            "- 试听顺序：先听 Gold Teacher 确认方言发音，再听 Voice Matched 判断音色迁移。",
+            "- 试听顺序：直接听最终方言克隆音频；无参考音频时为普通 Qwen TTS 回退。",
             f"- 推荐策略：{voice_match_summary.get('recommendation_reason') or gap_summary.get('recommended_strategy') or '无'}",
             f"- 推荐原因：{gap_summary.get('recommended_reason') or '无'}",
-            f"- Gold Teacher 输入层：{_input_mode_label(teacher_route.get('input_mode') or '')}",
-            f"- Voice Matched 输入层：{_input_mode_label(voice_matched_route.get('input_mode') or '')}",
+            f"- Qwen Voice Copy 输入层：{_input_mode_label(voice_matched_route.get('input_mode') or teacher_route.get('input_mode') or '')}",
         ]
     )
 
@@ -314,15 +324,14 @@ def build_text_compare_markdown(result: dict[str, Any]) -> str:
     rewrite = result.get("rewrite") or {}
     tts = result.get("tts") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
-    voice_matched_route = _resolve_route(tts, "voice_matched")
+    voice_matched_route = _resolve_route(tts, "qwen_cloned_dialect")
     rows = [
         ("原始 ASR", asr.get("punc_text") or asr.get("text") or "无"),
         ("审查后语义普通话", review.get("asr_reviewed_text") or "无"),
         ("方言发声文本", rewrite.get("dialect_text") or "无"),
         ("发音转写文本", rewrite.get("pronunciation_text") or "无"),
         ("韵律润色文本", rewrite.get("prosody_text") or "无"),
-        (f"Gold Teacher 输入文本（{_input_mode_label(teacher_route.get('input_mode') or '')}）", teacher_route.get("input_text") or "无"),
-        (f"Voice Matched Source（{_input_mode_label(voice_matched_route.get('input_mode') or '')}）", voice_matched_route.get("input_text") or "Gold Teacher 音频"),
+        (f"Qwen Voice Copy 输入文本（{_input_mode_label(voice_matched_route.get('input_mode') or teacher_route.get('input_mode') or '')}）", voice_matched_route.get("input_text") or teacher_route.get("input_text") or "无"),
     ]
     lines = ["### 文本与音频路由对比", "| 区域 | 内容 |", "| --- | --- |"]
     for label, value in rows:
@@ -334,18 +343,18 @@ def build_gap_summary_markdown(result: dict[str, Any]) -> str:
     tts = result.get("tts") or {}
     gap_summary = tts.get("gap_summary") or {}
     voice_match_summary = tts.get("voice_match_summary") or {}
-    recommended_label = _recommended_route_label(tts.get("recommended_main_output") or gap_summary.get("recommended_route") or "gold_teacher")
+    recommended_label = _recommended_route_label(tts.get("recommended_main_output") or gap_summary.get("recommended_route") or "qwen_cloned_dialect")
     return "\n".join(
         [
             "### 差距摘要",
-            f"- Teacher vs Voice Matched 内容差异：{gap_summary.get('content_diff') or 'Voice Matched 应继承 Gold Teacher 音频内容。'}",
-            f"- Teacher vs Voice Matched 发音差异：{gap_summary.get('pronunciation_diff') or 'Voice Matched 不重新决定发音。'}",
-            f"- Teacher vs Voice Matched 流畅度差异：{gap_summary.get('fluency_diff') or '无'}",
+            f"- Qwen Voice Copy 内容说明：{gap_summary.get('content_diff') or '直接合成清洗后的方言/口语文本。'}",
+            f"- Qwen Voice Copy 发音说明：{gap_summary.get('pronunciation_diff') or '由 Qwen VC 根据输入文本重新合成。'}",
+            f"- Qwen Voice Copy 流畅度说明：{gap_summary.get('fluency_diff') or '无'}",
             f"- 路由摘要：{gap_summary.get('route_summary') or '无'}",
-            f"- 处理分工：{gap_summary.get('processing_split') or 'Gold Teacher 决定怎么说，Voice Matched 决定像谁说。'}",
-            f"- Voice Matched 可用：{'是' if voice_match_summary.get('voice_matched_available') else '否'}",
-            f"- Voice Matched Provider：{voice_match_summary.get('voice_match_provider') or '无'}",
-            f"- Voice Matched 错误：{voice_match_summary.get('voice_match_error') or '无'}",
+            f"- 处理分工：{gap_summary.get('processing_split') or 'Qwen voice copy 同时负责音色复刻和最终语音合成。'}",
+            f"- Qwen Voice Copy 可用：{'是' if voice_match_summary.get('voice_matched_available') else '否'}",
+            f"- Qwen Voice Copy Provider：{voice_match_summary.get('voice_match_provider') or '无'}",
+            f"- Qwen Voice Copy 错误：{voice_match_summary.get('voice_match_error') or '无'}",
             f"- 当前推荐：{recommended_label}",
         ]
     )
@@ -354,8 +363,8 @@ def build_gap_summary_markdown(result: dict[str, Any]) -> str:
 def build_route_cards_markdown(result: dict[str, Any]) -> tuple[str, str]:
     tts = result.get("tts") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
-    voice_matched_route = _resolve_route(tts, "voice_matched")
-    recommended_route = tts.get("recommended_main_output") or "gold_teacher"
+    voice_matched_route = _resolve_route(tts, "qwen_cloned_dialect")
+    recommended_route = tts.get("recommended_main_output") or "qwen_cloned_dialect"
 
     def _build(route: dict[str, Any]) -> str:
         route_name = route.get("route_name") or "gold_teacher"
@@ -381,7 +390,7 @@ def human_review_markdown(result: dict[str, Any]) -> str:
     rewrite = result.get("rewrite") or {}
     tts = result.get("tts") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
-    voice_matched_route = _resolve_route(tts, "voice_matched")
+    voice_matched_route = _resolve_route(tts, "qwen_cloned_dialect")
     gap_summary = tts.get("gap_summary") or {}
     voice_match_summary = tts.get("voice_match_summary") or {}
     source_audio = result.get("source_audio") or {}
@@ -408,18 +417,15 @@ def human_review_markdown(result: dict[str, Any]) -> str:
             f"- 参考处理：{ref_audio.get('frontend_mode') or '无'}",
             f"- 参考拼接片段：{ref_frontend.get('speech_segment_count', 0)}",
             f"- 参考拼接时长：{ref_frontend.get('concat_duration_s', '无')}",
-            f"- Gold Teacher 模型：{teacher_route.get('tts_model') or '无'}",
-            f"- Gold Teacher 音色：{teacher_route.get('tts_voice') or '无'}",
-            f"- Gold Teacher 输入模式：{_input_mode_label(teacher_route.get('input_mode') or '')}",
-            f"- Gold Teacher 输入文本：{teacher_route.get('input_text') or '无'}",
-            f"- Gold Teacher 音频文件：{Path(teacher_route.get('wav_path', '')).name if teacher_route.get('wav_path') else '无'}",
-            f"- Voice Matched Provider：{voice_matched_route.get('voice_clone_provider') or '无'}",
-            f"- Voice Matched 输入模式：{_input_mode_label(voice_matched_route.get('input_mode') or '')}",
-            f"- Voice Matched Source：{voice_matched_route.get('input_text') or teacher_route.get('wav_path') or '无'}",
-            f"- Voice Matched 音频文件：{Path(voice_matched_route.get('wav_path', '')).name if voice_matched_route.get('wav_path') else '无'}",
-            f"- Voice Matched 错误：{voice_matched_route.get('error') or '无'}",
+            f"- Qwen Voice Copy 模型：{voice_matched_route.get('tts_model') or teacher_route.get('tts_model') or '无'}",
+            f"- Qwen Voice Copy 音色：{voice_matched_route.get('tts_voice') or '无'}",
+            f"- Qwen Voice Copy Provider：{voice_matched_route.get('voice_clone_provider') or 'qwen_standard_tts'}",
+            f"- Qwen Voice Copy 输入模式：{_input_mode_label(voice_matched_route.get('input_mode') or '')}",
+            f"- Qwen Voice Copy 输入文本：{voice_matched_route.get('input_text') or '无'}",
+            f"- Qwen Voice Copy 音频文件：{Path(voice_matched_route.get('wav_path', '')).name if voice_matched_route.get('wav_path') else '无'}",
+            f"- Qwen Voice Copy 错误：{voice_matched_route.get('error') or '无'}",
             f"- 路由摘要：{gap_summary.get('route_summary') or '无'}",
-            f"- 推荐试听：{tts.get('recommended_main_output') or gap_summary.get('recommended_route') or 'gold_teacher'}",
+            f"- 推荐试听：{tts.get('recommended_main_output') or gap_summary.get('recommended_route') or 'qwen_cloned_dialect'}",
             f"- 推荐策略：{voice_match_summary.get('recommendation_reason') or gap_summary.get('recommended_strategy') or '无'}",
         ]
     )

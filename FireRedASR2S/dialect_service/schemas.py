@@ -115,6 +115,8 @@ class TtsRouteResponse(BaseModel):
     teacher_input_text: str = ""
     teacher_input_mode: str = "semantic_text"
     teacher_style_instruction: str = ""
+    reference_audio_validation: dict[str, Any] = Field(default_factory=dict)
+    voice_cache_hit: bool = False
 
 
 class GapSummaryResponse(BaseModel):
@@ -176,8 +178,10 @@ class TtsResponse(BaseModel):
     gap_summary: GapSummaryResponse | None = None
     gold_teacher: TtsRouteResponse | None = None
     voice_matched: TtsRouteResponse | None = None
+    cloned_dialect: TtsRouteResponse | None = None
+    qwen_cloned_dialect: TtsRouteResponse | None = None
     legacy_text_clone: TtsRouteResponse | None = None
-    recommended_main_output: str = "gold_teacher"
+    recommended_main_output: str = "qwen_cloned_dialect"
     voice_match_summary: VoiceMatchSummaryResponse | None = None
     timbre_ref_audio: str = ""
     prosody_ref_audio: str = ""

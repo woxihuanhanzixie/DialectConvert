@@ -35,6 +35,7 @@ def create_qwen_voice(ref_audio_path: str | Path, cfg: Step2Config, preferred_na
             "action": "create",
             "target_model": cfg.qwen_voice_target_model,
             "preferred_name": _sanitize_preferred_name(preferred_name),
+            "language": "zh",
             "audio": {"data": data_uri},
         },
     }
@@ -695,15 +696,14 @@ def _save_qwen_voice_cache(
 
 def _sanitize_preferred_name(name: str) -> str:
     value = name.strip().lower()
-    value = re.sub(r"[^a-z0-9_]+", "_", value)
-    value = re.sub(r"_{2,}", "_", value).strip("_")
+    value = re.sub(r"[^a-z0-9_]+", "", value)
     if not value:
-        value = "demo1voice"
-    if not re.match(r"^[a-z]", value):
-        value = f"demo1voice_{value}"
+        value = "demo1"
+    if not re.match(r"^[a-zA-Z]", value):
+        value = f"demo{value}"
     if len(value) < 3:
-        value = f"{value}_vc"
-    return value[:32]
+        value = f"{value}vc"
+    return value[:16]
 
 
 def _project_root() -> Path:

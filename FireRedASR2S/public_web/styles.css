@@ -292,6 +292,10 @@ button:disabled {
   visibility: hidden;
 }
 
+.hidden-panel {
+  display: none;
+}
+
 audio {
   width: 100%;
   margin-top: 14px;

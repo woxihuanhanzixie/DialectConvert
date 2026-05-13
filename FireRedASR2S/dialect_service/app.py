@@ -89,7 +89,7 @@ def _attach_public_audio_urls(result: dict, request: Request) -> dict:
     tts = result.get("tts") or {}
     if not isinstance(tts, dict):
         return result
-    route_keys = ["baseline", "clone", "gold_teacher", "voice_matched", "legacy_text_clone"]
+    route_keys = ["baseline", "clone", "gold_teacher", "voice_matched", "cloned_dialect", "qwen_cloned_dialect", "legacy_text_clone"]
     for key in route_keys:
         route = tts.get(key)
         if isinstance(route, dict):
@@ -98,7 +98,7 @@ def _attach_public_audio_urls(result: dict, request: Request) -> dict:
                 route["audio_url"] = public_url
     if isinstance(tts.get("gold_teacher"), dict):
         tts["baseline_audio_url"] = tts["gold_teacher"].get("audio_url", "")
-    primary_route_key = tts.get("recommended_main_output") or "gold_teacher"
+    primary_route_key = tts.get("recommended_main_output") or "qwen_cloned_dialect"
     primary_route = tts.get(primary_route_key)
     if isinstance(primary_route, dict):
         tts["audio_url"] = primary_route.get("audio_url", "")

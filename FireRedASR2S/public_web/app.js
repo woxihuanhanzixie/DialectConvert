@@ -2,6 +2,7 @@ const els = {
   form: document.getElementById("pipeline-form"),
   serviceStatus: document.getElementById("service-status"),
   inputAudio: document.getElementById("input-audio"),
+  speakerRefAudio: document.getElementById("speaker-ref-audio"),
   inputText: document.getElementById("input-text"),
   targetDialect: document.getElementById("target-dialect"),
   voice: document.getElementById("voice"),
@@ -11,6 +12,9 @@ const els = {
   totalLatency: document.getElementById("total-latency"),
   traceId: document.getElementById("trace-id"),
   errorText: document.getElementById("error-text"),
+  clonedAudio: document.getElementById("cloned-audio"),
+  clonedDownload: document.getElementById("cloned-download"),
+  clonedNote: document.getElementById("cloned-note"),
   goldAudio: document.getElementById("gold-audio"),
   goldDownload: document.getElementById("gold-download"),
   goldNote: document.getElementById("gold-note"),
@@ -35,6 +39,16 @@ const API_BASE = (() => {
   if (window.location.protocol === "file:") {
     return "http://127.0.0.1:8002";
   }
+  if (
+    ["127.0.0.1", "localhost"].includes(window.location.hostname) &&
+    window.location.port &&
+    window.location.port !== "8002"
+  ) {
+    return "http://127.0.0.1:8002";
+  }
+  if (window.location.port && window.location.port !== "8002") {
+    return `${window.location.protocol}//${window.location.hostname}:8002`;
+  }
   return "";
 })();
 
@@ -45,12 +59,14 @@ function setStatus(message, state) {
 
 function routeLabel(value) {
   const labels = {
-    gold_teacher: "Gold Teacher",
-    voice_matched: "Gold Teacher",
-    baseline: "Gold Teacher",
-    clone: "Gold Teacher",
+    cloned_dialect: "声音复刻方言音频",
+    gold_teacher: "Gold Teacher 参考音频",
+    voice_matched: "Voice Matched",
+    baseline: "Gold Teacher 参考音频",
+    clone: "声音复刻方言音频",
+    legacy_text_clone: "声音复刻方言音频",
   };
-  return labels[value] || value || "Gold Teacher";
+  return labels[value] || value || "Gold Teacher 参考音频";
 }
 
 function setAudioCard(audioEl, linkEl, noteEl, route, emptyMessage) {
@@ -209,6 +225,7 @@ async function checkHealth() {
 async function submitPipeline(event) {
   event.preventDefault();
   const mainAudio = els.inputAudio.files?.[0];
+  const speakerRefAudio = els.speakerRefAudio.files?.[0];
   const inputText = els.inputText.value.trim();
   if (!mainAudio && !inputText) {
     setStatus("请上传主音频或输入文本。", "error");
@@ -218,6 +235,7 @@ async function submitPipeline(event) {
   const [targetDialect, dialectStyle] = els.targetDialect.value.split(":");
   const form = new FormData();
   if (mainAudio) form.append("file", mainAudio);
+  if (speakerRefAudio) form.append("speaker_ref_audio", speakerRefAudio);
   if (inputText) form.append("text", inputText);
   form.append("enable_punc", "true");
   form.append("enable_rewrite", "true");
@@ -226,12 +244,12 @@ async function submitPipeline(event) {
   form.append("voice", els.voice.value);
   form.append("target_dialect", targetDialect);
   form.append("dialect_style", dialectStyle);
-  form.append("voice_clone_enabled", "false");
-  form.append("voice_clone_provider", "none");
+  form.append("voice_clone_enabled", speakerRefAudio ? "true" : "false");
+  form.append("voice_clone_provider", speakerRefAudio ? "qwen_voice_clone" : "none");
 
   els.submitBtn.disabled = true;
   resetOutputs();
-  setStatus("正在生成 Gold Teacher...", "loading");
+  setStatus(speakerRefAudio ? "正在生成复刻方言语音..." : "正在生成 Gold Teacher 参考音频...", "loading");
 
   try {
     const resp = await fetch(`${API_BASE}/api/v1/dialect/pipeline`, {
@@ -243,6 +261,7 @@ async function submitPipeline(event) {
 
     const tts = payload.tts || {};
     const goldTeacher = tts.gold_teacher || {};
+    const clonedDialect = tts.cloned_dialect || tts.legacy_text_clone || {};
     const asr = payload.asr || {};
     const review = payload.review || {};
     const rewrite = payload.rewrite || {};
@@ -250,7 +269,9 @@ async function submitPipeline(event) {
     els.recommendedOutput.textContent = routeLabel(tts.recommended_main_output);
     els.totalLatency.textContent = `${Math.round(payload.total_latency_ms || 0)} ms`;
     els.traceId.textContent = payload.trace_id || "-";
-    els.errorText.textContent = goldTeacher.error || "无错误";
+    const cloneError = clonedDialect.error || "";
+    const cloneFallback = clonedDialect.fallback_reason || "";
+    els.errorText.textContent = cloneError || goldTeacher.error || (speakerRefAudio && cloneFallback ? cloneFallback : "无错误");
     els.asrText.textContent = asr.punc_text || asr.text || (mainAudio ? "-" : "文本输入，无 ASR");
     els.reviewedText.textContent = review.asr_reviewed_text || "-";
     els.semanticText.textContent = rewrite.semantic_text || rewrite.dialect_text || "-";
@@ -259,7 +280,14 @@ async function submitPipeline(event) {
     els.culturalCards.innerHTML = renderCulturalCards(rewrite.cultural_cards);
     updateStats(rewrite);
 
-    setAudioCard(els.goldAudio, els.goldDownload, els.goldNote, goldTeacher, "Gold Teacher 暂未生成。");
+    setAudioCard(
+      els.clonedAudio,
+      els.clonedDownload,
+      els.clonedNote,
+      clonedDialect,
+      speakerRefAudio ? "声音复刻方言音频暂未生成。" : "未上传音色参考音频，未执行声音复刻。"
+    );
+    setAudioCard(els.goldAudio, els.goldDownload, els.goldNote, goldTeacher, "Gold Teacher 参考音频暂未生成。");
     setStatus("处理完成。", "success");
   } catch (error) {
     const message = error instanceof Error ? error.message : "请求失败";

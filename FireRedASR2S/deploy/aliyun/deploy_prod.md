@@ -7,13 +7,14 @@
 - 主后端：`dialect_service`
 - 主语音能力：`DashScope/Qwen API`
 - ASR：公网默认 `api_only`，只走云 ASR
-- Voice Matched：首版公网稳定版默认关闭，页面清楚展示 Gold Teacher 回退
-- 本地模型：FireRed ASR、OpenVoice、RVC 只保留为后续手动恢复/评测路线，不作为国内上线默认主链路，也不在公网页面展示
+- 声音复刻：公网主链路使用 Qwen API 声音复刻，输出 `qwen_cloned_dialect`
+- Gold Teacher：仅保留为本地/历史兼容能力，公网 API-only 主流程默认不展示也不依赖它
+- 本地模型：FireRed ASR、OpenVoice、RVC 只保留为后续 GPU 评测路线，不作为当前 API-only 公网部署依赖
 
 ## 推荐机器
 
 - 阿里云 ECS Linux
-- 首版 API-first 可使用 CPU 机器，2C2G 可跑 Gold Teacher 稳定版，建议 2C4G 起步
+- API-only 声音复刻版可使用 CPU 机器，2C2G 可跑通，建议 2C4G 起步
 - 系统盘建议 >= 60GB
 - 如继续保留本地 ASR 模型和历史运行数据，数据盘建议 >= 100GB
 - 安全组开放：`80`、`443`，后端 `8002` 只监听 `127.0.0.1`，不要直接暴露公网
@@ -39,11 +40,11 @@ cd /opt/Competition/FireRedASR2S
 pip install -r deploy/aliyun/requirements-prod.txt
 ```
 
-公网 Gold Teacher 稳定版使用轻量依赖，不安装本地 FireRed ASR、OpenVoice、RVC 和 GPU 版 PyTorch。若后续要恢复本地模型评测，再单独安装完整 `requirements.txt` 并准备模型目录。
+公网 API-only 声音复刻版使用轻量依赖，不安装本地 FireRed ASR、OpenVoice、RVC 和 GPU 版 PyTorch。若后续要恢复本地模型评测，再单独安装完整 `requirements.txt` 并准备模型目录。
 
 ### 3. 配置环境变量
 
-- 复制 `deploy/aliyun/env.example.prod`
+- 复制 `deploy/aliyun/env.example.api-clone.prod`
 - 生成 `/etc/voice-demo/dialect_service.env`
 - 填写：
   - `DEEPSEEK_API_KEY`
@@ -52,13 +53,13 @@ pip install -r deploy/aliyun/requirements-prod.txt
   - `QWEN_LLM_API_KEY`
   - `PUBLIC_APP_ORIGIN`
   - `CORS_ALLOW_ORIGINS`
-- 国内上线默认保留 Gold Teacher 稳定版：
+- 国内上线默认使用 Qwen API 声音复刻方言输出：
 
 ```bash
-VOICE_MATCH_PROVIDER=none
-VOICE_CONVERSION_PROVIDER=none
+VOICE_MATCH_PROVIDER=qwen_voice_clone
 VOICE_CLONE_PROVIDER=qwen_voice_clone
 TEXT_CLONE_PROVIDER=qwen_voice_clone
+VOICE_CONVERSION_PROVIDER=none
 ASR_PROVIDER=api_only
 DISABLE_LOCAL_ASR=1
 ENABLE_LOCAL_ASR_FALLBACK=0
@@ -69,7 +70,7 @@ SPEAKER_REF_AUDIO_MIN_S=10
 SPEAKER_REF_AUDIO_MAX_S=20
 ```
 
-不要把 `VOICE_MATCH_PROVIDER` 设置为 `qwen_voice_clone`。该路线是 `文本 + 参考音频 -> 克隆语音`，会重新决定发音和韵律；当前公网首版必须保持 `Gold Teacher` 作为推荐主输出。
+当前公网 API-only 版本的主目标是“用参考音色输出方言语音”。`qwen_voice_clone` 是 `文本 + 参考音频 -> 复刻音色语音`，会重新合成发音和韵律；页面将其展示为“最终方言克隆音频”，不再冒充 OpenVoice/RVC 的 teacher-first audio-to-audio，也不再要求先生成 Gold Teacher。
 
 不要开启 `ENABLE_LOCAL_ASR_FALLBACK`。当前公网版本的 ASR 只走 DashScope/Qwen API；FireRed 本地模型留在仓库中，后续需要时再单独恢复。
 
@@ -107,10 +108,11 @@ sudo systemctl reload nginx
 - 打开 `http://43.139.53.84`，或后续绑定后的域名
 - 上传音频
 - 确认：
-  - `Gold Teacher` 可播放
+  - 上传 10-20 秒清晰人声参考音频后，“声音复刻方言音频”可播放
+  - `最终方言克隆音频` 可播放；无参考音频时明确显示普通 Qwen TTS 回退
   - 页面展示 RAG 命中率/耗时/语义相似度看板
   - 页面展示文化百科悬浮卡，鼠标悬停或聚焦可查看词义、文化说明和例句
-  - 页面不展示 FireRed 本地模型、OpenVoice、RVC、Voice Matched 控件
+  - 页面不展示 FireRed 本地模型、OpenVoice、RVC 控件
   - 三种方言选择可生效
 
 ## 成本回退建议
@@ -118,10 +120,10 @@ sudo systemctl reload nginx
 - 若本地 ASR 依赖过重：
   - 优先把 ASR 切到云端 API
   - 保留本地 ASR 作为实验环境
-- 若后续需要 Voice Matched：
-  - 优先评估更高内存机器或独立推理服务
-  - OpenVoice/RVC 必须保持 teacher-first audio-to-audio 语义
-  - Qwen 声音复刻只能作为独立对照路线，不应冒充 Voice Matched
+- 若后续需要 teacher-first Voice Matched：
+  - 需要 GPU 机器或独立推理服务
+  - OpenVoice/RVC 必须保持 `Gold Teacher wav -> audio-to-audio -> voice_matched wav`
+  - 该 GPU 路线与当前 Qwen API 声音复刻路线分开展示
 
 ## 后续优化
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
@@ -18,6 +19,7 @@ from .adapters import (
     review_asr_text,
     review_asr_text_en,
     rewrite_text,
+    tts_text,
     translate_en_to_pivot_zh,
     tts_gold_teacher,
     tts_voice_match_from_teacher,
@@ -81,6 +83,7 @@ class DialectPipelineEngine:
                 ("prosody_text", "prosody_text", "韵律润色文本"),
                 ("pronunciation_text", "pronunciation_text", "发音转写文本"),
                 ("dialect_text", "dialect_text", "方言发声文本"),
+                ("semantic_text", "semantic_text", "语义确认文本"),
             ):
                 text = str(rewrite.get(key) or "").strip()
                 if text:
@@ -233,6 +236,8 @@ class DialectPipelineEngine:
             "teacher_input_text": input_text,
             "teacher_input_mode": input_mode,
             "teacher_style_instruction": teacher_style_instruction or tts_result.get("teacher_style_instruction", ""),
+            "reference_audio_validation": tts_result.get("reference_audio_validation", {}),
+            "voice_cache_hit": bool(tts_result.get("voice_cache_hit", False)),
         }
 
     def _build_gap_summary(
@@ -469,8 +474,217 @@ class DialectPipelineEngine:
         voice_matched_route: dict[str, Any],
     ) -> str:
         if voice_matched_route.get("wav_path") and not voice_matched_route.get("error"):
-            return "voice_matched"
+            return voice_matched_route.get("route_name") or "voice_matched"
         return "gold_teacher"
+
+    def _qwen_voice_copy_input(
+        self,
+        rewrite: dict[str, Any] | None,
+        review_text: str,
+        pivot_text_zh: str = "",
+        *,
+        target_dialect: str,
+    ) -> tuple[str, str, str]:
+        candidates: list[tuple[str, str, str]] = []
+        if rewrite:
+            if target_dialect == "yue":
+                candidates.extend(
+                    [
+                        ("dialect_text", str(rewrite.get("dialect_text") or ""), "clean_dialect_text"),
+                        ("semantic_text", str(rewrite.get("semantic_text") or ""), "clean_semantic_text"),
+                    ]
+                )
+            else:
+                candidates.extend(
+                    [
+                        ("semantic_text", str(rewrite.get("semantic_text") or ""), "clean_semantic_text"),
+                        ("dialect_text", str(rewrite.get("dialect_text") or ""), "clean_dialect_text"),
+                    ]
+                )
+        candidates.append(("review_text", pivot_text_zh or review_text or "", "clean_review_text"))
+        for source_mode, raw_text, clean_mode in candidates:
+            clean_text = self._clean_synthesis_text(raw_text)
+            if clean_text:
+                reason = (
+                    "Qwen voice copy 主链路直接合成清洗后的自然方言/口语文本；"
+                    "pronunciation/prosody 调试层不再作为最终朗读稿。"
+                )
+                return clean_text, clean_mode, f"{reason} source={source_mode}"
+        return "", "empty", "No usable text for Qwen voice copy synthesis."
+
+    def _clean_synthesis_text(self, text: str) -> str:
+        clean = str(text or "").strip()
+        if not clean:
+            return ""
+        if any(marker in clean for marker in ("无法改写", "没有提供有效原文", "请提供", "未获得可发声", "仍在生成")):
+            return ""
+        clean = re.sub(r"(?im)^\s*(?:发音| pronunciation|韵律| prosody|提示|说明|注音|拼音)\s*[:：].*$", "", clean)
+        clean = re.sub(r"[（(][^（）()]{0,80}(?:拼音|注音|发音|韵律|停顿|提示|debug|DEBUG)[^（）()]{0,80}[）)]", "", clean)
+        clean = re.sub(r"[\[【][^\]】]{0,80}(?:拼音|注音|发音|韵律|停顿|提示|debug|DEBUG)[^\]】]{0,80}[\]】]", "", clean)
+        clean = re.sub(r"<[^>]{0,80}>", "", clean)
+        clean = clean.replace("｜", "").replace("|", "")
+        clean = re.sub(r"/{1,3}", "，", clean)
+        clean = re.sub(r"\s+", "", clean)
+        clean = re.sub(r"[，,、]{2,}", "，", clean)
+        clean = re.sub(r"[。.!！?？]{2,}", "。", clean)
+        return clean.strip("，,、。.!！?？；;：:")
+
+    def _build_qwen_voice_copy_tts(
+        self,
+        *,
+        trace_stem: str,
+        rewrite: dict[str, Any] | None,
+        review_text: str,
+        pivot_text_zh: str,
+        speaker_ref_audio: str,
+        voice: str | None,
+        target_dialect: str,
+        dialect_style: str,
+    ) -> dict[str, Any]:
+        input_text, input_mode, input_reason = self._qwen_voice_copy_input(
+            rewrite,
+            review_text,
+            pivot_text_zh,
+            target_dialect=target_dialect,
+        )
+        old_voice = self.cfg.qwen_tts_voice
+        old_style_instructions = self.cfg.tts_style_instructions
+        old_clone_provider = self.cfg.voice_clone_provider
+        teacher_style_instruction = build_teacher_style_instruction(target_dialect, dialect_style)
+        self.cfg.tts_style_instructions = teacher_style_instruction
+        if voice:
+            self.cfg.qwen_tts_voice = voice
+        active_voice = self.cfg.qwen_tts_voice
+        out_wav = self._build_wav_path(f"{trace_stem}_qwen_cloned_dialect")
+        qwen_provider = "qwen_voice_clone"
+        try:
+            self.cfg.voice_clone_provider = qwen_provider
+            has_ref = bool(speaker_ref_audio)
+            result = tts_text(
+                input_text,
+                self.cfg,
+                out_wav,
+                voice_clone_enabled=has_ref,
+                speaker_ref_audio=speaker_ref_audio if has_ref else "",
+                preferred_name=f"demo{uuid.uuid4().hex[:8]}",
+            )
+        finally:
+            self.cfg.qwen_tts_voice = old_voice
+            self.cfg.tts_style_instructions = old_style_instructions
+            self.cfg.voice_clone_provider = old_clone_provider
+
+        if speaker_ref_audio:
+            route_name = "qwen_cloned_dialect"
+            route_role = "api_voice_copy_dialect"
+            clone_mode = "qwen_voice_clone_api"
+            provider = qwen_provider
+            route_reason = "Qwen voice copy 主链路：参考音频创建或复用专属音色后，直接合成方言/口语文本。"
+            fallback_reason = "" if not result.get("error") else "qwen_voice_clone_failed"
+            note = "已调用 Qwen 声音复刻 API，使用参考音频音色合成最终方言语音。"
+            model = result.get("model") or self.cfg.qwen_voice_target_model
+        else:
+            route_name = "qwen_standard_fallback"
+            route_role = "standard_qwen_tts_fallback"
+            clone_mode = "standard_tts_no_reference"
+            provider = ""
+            route_reason = "未提供参考音频，无法声音复刻；已回退到普通 Qwen TTS。"
+            fallback_reason = "missing_reference_audio"
+            note = "未提供参考音频，本次只生成系统音色方言语音。"
+            model = result.get("model") or self.cfg.qwen_tts_model
+        result["voice_clone_provider"] = provider
+        result["clone_mode"] = clone_mode
+        result["speaker_similarity_note"] = note
+        result["fallback_reason"] = fallback_reason if not result.get("error") else (result.get("fallback_reason") or fallback_reason)
+        route = self._build_route_payload(
+            route_name,
+            result,
+            input_text=input_text,
+            input_mode=input_mode,
+            route_reason=f"{route_reason} {input_reason}",
+            default_voice=active_voice,
+            voice_clone_enabled=bool(speaker_ref_audio),
+            teacher_style_instruction=teacher_style_instruction,
+        )
+        route["tts_model"] = model
+        route["voice_clone_provider"] = provider
+        route["route_role"] = route_role
+        gap_summary = {
+            "content_diff": "公网主输出由 Qwen voice copy 直接合成，不再与 Gold Teacher / audio-to-audio 分叉对比。",
+            "pronunciation_diff": "发音和韵律由 Qwen VC 根据清洗后的方言/口语文本重新合成。",
+            "fluency_diff": "优先使用自然朗读文本，避免把 pronunciation/prosody 调试层原样读出。",
+            "route_summary": "ASR/文本 -> 审查纠错 -> 方言口语化改写 -> Qwen voice enrollment -> qwen3-tts-vc 输出。",
+            "processing_split": "Qwen voice copy 同时承担音色复刻和最终方言语音合成；OpenVoice/RVC/Gold Teacher 不参与公网主链路。",
+            "issue_tags": [],
+            "issue_tag_summary": "Qwen voice copy 主链路已启用。",
+            "recommended_route": route_name,
+            "recommended_strategy": "直接试听最终方言克隆音频；无参考音频时明确回退为普通 Qwen TTS。",
+            "recommended_reason": "公网 API-only 版本以 Qwen voice copy 为主输出。",
+            "baseline_advantage": "",
+            "clone_weakness": "复刻质量仍依赖参考音频清晰度、时长和 Qwen VC 对目标方言的合成能力。",
+        }
+        if result.get("error"):
+            gap_summary["issue_tags"].append(
+                {
+                    "layer": "clone_carrier",
+                    "tag": "qwen_voice_copy_error",
+                    "route": route_name,
+                    "severity": "high",
+                    "reason": result.get("error"),
+                }
+            )
+            gap_summary["issue_tag_summary"] = "Qwen voice copy 生成异常。"
+        voice_match_summary = {
+            "teacher_is_reference": False,
+            "voice_matched_available": bool(route.get("wav_path")) and not route.get("error"),
+            "voice_match_provider": provider or "qwen_standard_tts",
+            "voice_match_error": route.get("error", ""),
+            "recommendation_reason": gap_summary["recommended_reason"],
+        }
+        return {
+            "wav_path": route["wav_path"],
+            "audio_url": route["audio_url"],
+            "expires_at": route["expires_at"],
+            "tts_model": route["tts_model"],
+            "tts_voice": route["tts_voice"],
+            "latency_ms": route["latency_ms"],
+            "error": route["error"],
+            "voice_clone_enabled": route["voice_clone_enabled"],
+            "voice_clone_provider": route["voice_clone_provider"],
+            "speaker_similarity_note": route["speaker_similarity_note"],
+            "clone_mode": route["clone_mode"],
+            "fallback_reason": route["fallback_reason"],
+            "speaker_similarity_priority": route["speaker_similarity_priority"],
+            "tts_fluency_mode": route["tts_fluency_mode"],
+            "tts_style_instructions": route["tts_style_instructions"],
+            "instruction_mode_active": route["instruction_mode_active"],
+            "tts_input_text": route["input_text"],
+            "tts_input_mode": route["input_mode"],
+            "teacher_input_text": route["input_text"],
+            "teacher_input_mode": route["input_mode"],
+            "teacher_style_instruction": teacher_style_instruction,
+            "audio_meta": route["audio_meta"],
+            "baseline_wav_path": "",
+            "baseline_audio_url": "",
+            "baseline_tts_model": "",
+            "baseline_tts_voice": "",
+            "baseline_error": "",
+            "baseline_tts_input_text": "",
+            "baseline_tts_input_mode": "",
+            "baseline_audio_meta": None,
+            "baseline": None,
+            "clone": route,
+            "gap_summary": gap_summary,
+            "gold_teacher": None,
+            "voice_matched": route,
+            "cloned_dialect": route,
+            "qwen_cloned_dialect": route,
+            "legacy_text_clone": None,
+            "recommended_main_output": route_name,
+            "voice_match_summary": voice_match_summary,
+            "timbre_ref_audio": str(speaker_ref_audio) if speaker_ref_audio else "",
+            "prosody_ref_audio": "",
+            "prosody_guidance_mode": "",
+        }
 
     def process_text(
         self,
@@ -517,6 +731,27 @@ class DialectPipelineEngine:
 
         tts = None
         if enable_tts:
+            tts = self._build_qwen_voice_copy_tts(
+                trace_stem=trace_id,
+                rewrite=rewrite,
+                review_text=review_text_value,
+                pivot_text_zh=pivot_text_zh,
+                speaker_ref_audio=speaker_ref_audio,
+                voice=voice,
+                target_dialect=active_target_dialect,
+                dialect_style=active_dialect_style,
+            )
+            return {
+                "source_audio": None,
+                "asr": None,
+                "review": review,
+                "rewrite": rewrite,
+                "tts": tts,
+                "trace_id": trace_id,
+                "total_latency_ms": round((perf_counter() - t0) * 1000, 2),
+                "input_lang": input_lang,
+                "pivot_text_zh": pivot_text_zh,
+            }
             baseline_text, baseline_input_mode, baseline_reason, has_teacher_control_text = self._teacher_tts_input(
                 rewrite,
                 review_text_value,
@@ -539,21 +774,24 @@ class DialectPipelineEngine:
             voice_match_requested = bool(speaker_ref_audio and (voice_clone_enabled or speaker_ref_audio))
             active_voice_match_provider = (self.cfg.voice_conversion_provider or "").strip().lower()
             qwen_voice_match_provider = active_voice_match_provider in {"qwen_voice_clone", "qwen_vc", "qwen"}
-            if qwen_voice_match_provider:
-                voice_matched_result = {
-                    "wav_path": "",
-                    "audio_url": "",
-                    "expires_at": "",
-                    "error": "qwen_voice_clone is text-to-speech cloning and cannot be used as teacher-first Voice Matched.",
-                    "voice_clone_provider": active_voice_match_provider,
-                    "fallback_reason": "qwen_text_clone_not_teacher_audio_to_audio",
-                    "latency_ms": 0.0,
-                    "speaker_similarity_note": "Qwen text clone is comparison only; Voice Matched must follow Gold Teacher audio.",
-                    "speaker_similarity_priority": self.cfg.speaker_similarity_priority,
-                    "tts_fluency_mode": self.cfg.tts_fluency_mode,
-                    "tts_style_instructions": self.cfg.tts_style_instructions,
-                    "instruction_mode_active": False,
-                }
+            if qwen_voice_match_provider and voice_match_requested:
+                old_clone_provider = self.cfg.voice_clone_provider
+                try:
+                    self.cfg.voice_clone_provider = active_voice_match_provider
+                    voice_matched_result = tts_text(
+                        baseline_text,
+                        self.cfg,
+                        voice_matched_wav_path,
+                        voice_clone_enabled=True,
+                        speaker_ref_audio=speaker_ref_audio,
+                        preferred_name=f"api_clone_{uuid.uuid4().hex[:8]}",
+                    )
+                finally:
+                    self.cfg.voice_clone_provider = old_clone_provider
+                voice_matched_result["voice_clone_provider"] = active_voice_match_provider
+                voice_matched_result["clone_mode"] = "qwen_voice_clone_api"
+                voice_matched_result["speaker_similarity_note"] = "已调用 Qwen 声音复刻 API，用参考音频创建或复用专属音色后合成方言语音。"
+                voice_matched_result["fallback_reason"] = "" if not voice_matched_result.get("error") else "qwen_voice_clone_failed"
             elif voice_match_requested and teacher_result.get("wav_path") and has_teacher_control_text:
                 voice_matched_result = tts_voice_match_from_teacher(
                     teacher_result.get("wav_path", ""),
@@ -596,25 +834,27 @@ class DialectPipelineEngine:
                 teacher_style_instruction=teacher_style_instruction,
             )
             teacher_route["route_role"] = "gold_standard_pronunciation"
-            voice_match_input_mode = "teacher_audio_to_audio"
+            voice_match_route_name = "cloned_dialect" if qwen_voice_match_provider else "voice_matched"
+            voice_match_input_mode = baseline_input_mode if qwen_voice_match_provider else "teacher_audio_to_audio"
+            voice_match_input_text = baseline_text if qwen_voice_match_provider else teacher_result.get("wav_path", "")
             voice_match_reason = (
-                "voice matched 调用 Qwen 声音复刻 API，用参考音频创建或复用专属音色后合成最终音频。"
-                if voice_match_input_mode == "semantic_text_with_cloned_voice"
+                "声音复刻方言音频调用 Qwen API，用参考音频创建或复用专属音色后直接合成方言文本。"
+                if qwen_voice_match_provider
                 else "voice matched 只负责“像谁说”，基于 gold teacher 音频做音色转换，不再决定发音内容。"
             )
             voice_matched_route = self._build_route_payload(
-                "voice_matched",
+                voice_match_route_name,
                 voice_matched_result,
-                input_text=teacher_result.get("wav_path", ""),
+                input_text=voice_match_input_text,
                 input_mode=voice_match_input_mode,
                 route_reason=voice_match_reason,
                 default_voice=active_voice,
                 voice_clone_enabled=voice_match_requested,
                 teacher_style_instruction=teacher_style_instruction,
             )
-            voice_matched_route["tts_model"] = voice_matched_result.get("model", self.cfg.voice_conversion_model)
+            voice_matched_route["tts_model"] = voice_matched_result.get("model") or (self.cfg.qwen_voice_target_model if qwen_voice_match_provider else self.cfg.voice_conversion_model)
             voice_matched_route["voice_clone_provider"] = voice_matched_result.get("voice_clone_provider") or self.cfg.voice_conversion_provider
-            voice_matched_route["route_role"] = "voice_identity_transfer"
+            voice_matched_route["route_role"] = "api_voice_clone_dialect" if qwen_voice_match_provider else "voice_identity_transfer"
             gap_summary = self._build_gap_summary(
                 teacher_route=teacher_route,
                 voice_matched_route=voice_matched_route,
@@ -629,7 +869,7 @@ class DialectPipelineEngine:
             )
             gap_summary["recommended_route"] = recommended_main_output
             gap_summary["recommended_reason"] = voice_match_summary["recommendation_reason"]
-            primary_route = voice_matched_route if recommended_main_output == "voice_matched" else teacher_route
+            primary_route = voice_matched_route if recommended_main_output in {"voice_matched", "cloned_dialect"} else teacher_route
             tts = {
                 "wav_path": primary_route["wav_path"],
                 "audio_url": primary_route["audio_url"],
@@ -666,7 +906,8 @@ class DialectPipelineEngine:
                 "gap_summary": gap_summary,
                 "gold_teacher": teacher_route,
                 "voice_matched": voice_matched_route,
-                "legacy_text_clone": None,
+                "cloned_dialect": voice_matched_route if qwen_voice_match_provider else None,
+                "legacy_text_clone": voice_matched_route if qwen_voice_match_provider else None,
                 "recommended_main_output": recommended_main_output,
                 "voice_match_summary": voice_match_summary,
                 "timbre_ref_audio": str(speaker_ref_audio) if speaker_ref_audio else "",
@@ -756,6 +997,27 @@ class DialectPipelineEngine:
             )
             rewrite_future = None
             rewrite_executor = None
+            tts = self._build_qwen_voice_copy_tts(
+                trace_stem=Path(wav_path).stem,
+                rewrite=rewrite,
+                review_text=review["asr_reviewed_text"],
+                pivot_text_zh=pivot_text_zh,
+                speaker_ref_audio=speaker_ref_audio,
+                voice=voice,
+                target_dialect=active_target_dialect,
+                dialect_style=active_dialect_style,
+            )
+            return {
+                "source_audio": {"path": str(Path(wav_path).resolve())},
+                "asr": asr_result,
+                "review": review,
+                "rewrite": rewrite,
+                "tts": tts,
+                "trace_id": trace_id,
+                "total_latency_ms": round((perf_counter() - t0) * 1000, 2),
+                "input_lang": input_lang,
+                "pivot_text_zh": pivot_text_zh,
+            }
             baseline_text, baseline_input_mode, baseline_reason, has_teacher_control_text = self._teacher_tts_input(
                 rewrite,
                 review["asr_reviewed_text"],
@@ -778,21 +1040,24 @@ class DialectPipelineEngine:
             voice_match_requested = bool(speaker_ref_audio and (voice_clone_enabled or speaker_ref_audio))
             active_voice_match_provider = (self.cfg.voice_conversion_provider or "").strip().lower()
             qwen_voice_match_provider = active_voice_match_provider in {"qwen_voice_clone", "qwen_vc", "qwen"}
-            if qwen_voice_match_provider:
-                voice_matched_result = {
-                    "wav_path": "",
-                    "audio_url": "",
-                    "expires_at": "",
-                    "error": "qwen_voice_clone is text-to-speech cloning and cannot be used as teacher-first Voice Matched.",
-                    "voice_clone_provider": active_voice_match_provider,
-                    "fallback_reason": "qwen_text_clone_not_teacher_audio_to_audio",
-                    "latency_ms": 0.0,
-                    "speaker_similarity_note": "Qwen text clone is comparison only; Voice Matched must follow Gold Teacher audio.",
-                    "speaker_similarity_priority": self.cfg.speaker_similarity_priority,
-                    "tts_fluency_mode": self.cfg.tts_fluency_mode,
-                    "tts_style_instructions": self.cfg.tts_style_instructions,
-                    "instruction_mode_active": False,
-                }
+            if qwen_voice_match_provider and voice_match_requested:
+                old_clone_provider = self.cfg.voice_clone_provider
+                try:
+                    self.cfg.voice_clone_provider = active_voice_match_provider
+                    voice_matched_result = tts_text(
+                        baseline_text,
+                        self.cfg,
+                        voice_matched_wav_out,
+                        voice_clone_enabled=True,
+                        speaker_ref_audio=speaker_ref_audio,
+                        preferred_name=f"api_clone_{uuid.uuid4().hex[:8]}",
+                    )
+                finally:
+                    self.cfg.voice_clone_provider = old_clone_provider
+                voice_matched_result["voice_clone_provider"] = active_voice_match_provider
+                voice_matched_result["clone_mode"] = "qwen_voice_clone_api"
+                voice_matched_result["speaker_similarity_note"] = "已调用 Qwen 声音复刻 API，用参考音频创建或复用专属音色后合成方言语音。"
+                voice_matched_result["fallback_reason"] = "" if not voice_matched_result.get("error") else "qwen_voice_clone_failed"
             elif voice_match_requested and teacher_result.get("wav_path") and has_teacher_control_text:
                 voice_matched_result = tts_voice_match_from_teacher(
                     teacher_result.get("wav_path", ""),
@@ -835,25 +1100,27 @@ class DialectPipelineEngine:
                 teacher_style_instruction=teacher_style_instruction,
             )
             teacher_route["route_role"] = "gold_standard_pronunciation"
-            voice_match_input_mode = "teacher_audio_to_audio"
+            voice_match_route_name = "cloned_dialect" if qwen_voice_match_provider else "voice_matched"
+            voice_match_input_mode = baseline_input_mode if qwen_voice_match_provider else "teacher_audio_to_audio"
+            voice_match_input_text = baseline_text if qwen_voice_match_provider else teacher_result.get("wav_path", "")
             voice_match_reason = (
-                "voice matched 调用 Qwen 声音复刻 API，用参考音频创建或复用专属音色后合成最终音频。"
-                if voice_match_input_mode == "semantic_text_with_cloned_voice"
+                "声音复刻方言音频调用 Qwen API，用参考音频创建或复用专属音色后直接合成方言文本。"
+                if qwen_voice_match_provider
                 else "voice matched 只负责“像谁说”，基于 gold teacher 音频做音色转换，不再决定发音内容。"
             )
             voice_matched_route = self._build_route_payload(
-                "voice_matched",
+                voice_match_route_name,
                 voice_matched_result,
-                input_text=teacher_result.get("wav_path", ""),
+                input_text=voice_match_input_text,
                 input_mode=voice_match_input_mode,
                 route_reason=voice_match_reason,
                 default_voice=active_voice,
                 voice_clone_enabled=voice_match_requested,
                 teacher_style_instruction=teacher_style_instruction,
             )
-            voice_matched_route["tts_model"] = voice_matched_result.get("model", self.cfg.voice_conversion_model)
+            voice_matched_route["tts_model"] = voice_matched_result.get("model") or (self.cfg.qwen_voice_target_model if qwen_voice_match_provider else self.cfg.voice_conversion_model)
             voice_matched_route["voice_clone_provider"] = voice_matched_result.get("voice_clone_provider") or self.cfg.voice_conversion_provider
-            voice_matched_route["route_role"] = "voice_identity_transfer"
+            voice_matched_route["route_role"] = "api_voice_clone_dialect" if qwen_voice_match_provider else "voice_identity_transfer"
             gap_summary = self._build_gap_summary(
                 teacher_route=teacher_route,
                 voice_matched_route=voice_matched_route,
@@ -868,7 +1135,7 @@ class DialectPipelineEngine:
             )
             gap_summary["recommended_route"] = recommended_main_output
             gap_summary["recommended_reason"] = voice_match_summary["recommendation_reason"]
-            primary_route = voice_matched_route if recommended_main_output == "voice_matched" else teacher_route
+            primary_route = voice_matched_route if recommended_main_output in {"voice_matched", "cloned_dialect"} else teacher_route
             tts = {
                 "wav_path": primary_route["wav_path"],
                 "audio_url": primary_route["audio_url"],
@@ -905,7 +1172,8 @@ class DialectPipelineEngine:
                 "gap_summary": gap_summary,
                 "gold_teacher": teacher_route,
                 "voice_matched": voice_matched_route,
-                "legacy_text_clone": None,
+                "cloned_dialect": voice_matched_route if qwen_voice_match_provider else None,
+                "legacy_text_clone": voice_matched_route if qwen_voice_match_provider else None,
                 "recommended_main_output": recommended_main_output,
                 "voice_match_summary": voice_match_summary,
                 "timbre_ref_audio": str(speaker_ref_audio) if speaker_ref_audio else "",

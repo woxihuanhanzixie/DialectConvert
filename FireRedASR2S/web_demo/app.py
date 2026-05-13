@@ -30,6 +30,10 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
     route = tts.get(route_name) or {}
     if route:
         return route
+    if route_name == "qwen_cloned_dialect":
+        route = tts.get("cloned_dialect") or tts.get("voice_matched") or tts.get("clone") or {}
+        if route:
+            return route
     if route_name in {"baseline", "gold_teacher"}:
         return {
             "route_name": "gold_teacher",
@@ -49,14 +53,14 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
             "instruction_mode_active": tts.get("instruction_mode_active", False),
         }
     return {
-        "route_name": "voice_matched",
+        "route_name": "qwen_cloned_dialect",
         "wav_path": "",
         "audio_url": "",
         "tts_model": "",
         "tts_voice": "",
         "error": "",
         "input_text": "",
-        "input_mode": "teacher_audio_to_audio",
+        "input_mode": "clean_dialect_text",
         "audio_meta": None,
         "voice_clone_enabled": False,
         "voice_clone_provider": "",
@@ -67,7 +71,7 @@ def _resolve_route(tts: dict[str, Any], route_name: str) -> dict[str, Any]:
         "tts_fluency_mode": "allow_rate_adjust",
         "route_reason": "",
         "teacher_input_text": tts.get("teacher_input_text", ""),
-        "teacher_input_mode": "teacher_audio_to_audio",
+        "teacher_input_mode": "clean_dialect_text",
         "teacher_style_instruction": tts.get("teacher_style_instruction", "") or tts.get("tts_style_instructions", ""),
         "instruction_mode_active": tts.get("instruction_mode_active", False),
     }
@@ -128,7 +132,7 @@ def process_audio(
     clone_ref_audio = source_audio.get("voice_clone_ref_audio") or {}
     ref_frontend = clone_ref_audio.get("audio_frontend") or {}
     teacher_route = _resolve_route(tts, "gold_teacher")
-    voice_matched_route = _resolve_route(tts, "voice_matched")
+    voice_matched_route = _resolve_route(tts, "qwen_cloned_dialect")
     gap_summary = tts.get("gap_summary") or {}
     voice_match_summary = tts.get("voice_match_summary") or {}
 
@@ -163,7 +167,7 @@ def process_audio(
     voice_matched_audio = None
     voice_matched_download_audio = None
     if voice_matched_route.get("wav_path") and Path(voice_matched_route["wav_path"]).exists():
-        voice_matched_audio = _prepare_preview_file(voice_matched_route["wav_path"], trace_id, "voice_matched")
+        voice_matched_audio = _prepare_preview_file(voice_matched_route["wav_path"], trace_id, "qwen_cloned_dialect")
         voice_matched_download_audio = voice_matched_audio
 
     quality_box = "\n".join(
@@ -184,10 +188,10 @@ def process_audio(
     )
     clone_box = "\n".join(
         [
-            f"Voice Matched 启用: {'是' if voice_matched_route.get('voice_clone_enabled') else '否'}",
-            f"Voice Matched Provider: {voice_match_summary.get('voice_match_provider') or voice_matched_route.get('voice_clone_provider') or 'none'}",
-            f"Voice Matched 模式: {voice_matched_route.get('input_mode') or 'teacher_audio_to_audio'}",
-            f"Source: Gold Teacher ({Path(teacher_route.get('wav_path', '')).name if teacher_route.get('wav_path') else 'none'})",
+            f"Qwen Voice Copy 启用: {'是' if voice_matched_route.get('voice_clone_enabled') else '否'}",
+            f"Provider: {voice_match_summary.get('voice_match_provider') or voice_matched_route.get('voice_clone_provider') or 'qwen_standard_tts'}",
+            f"输入模式: {voice_matched_route.get('input_mode') or 'clean_dialect_text'}",
+            f"Source: cleaned dialect text ({voice_matched_route.get('input_mode') or 'none'})",
             f"Target: reference audio ({Path(clone_ref_audio.get('path', '')).name if clone_ref_audio.get('path') else 'none'})",
             f"回退原因: {voice_matched_route.get('fallback_reason') or voice_match_summary.get('voice_match_error') or 'none'}",
             f"说明: {voice_matched_route.get('speaker_similarity_note') or 'none'}",
@@ -198,8 +202,8 @@ def process_audio(
             f"ASR: {asr.get('latency_ms', 0)} ms",
             f"Review: {(review or {}).get('llm_latency_ms', 0)} ms",
             f"Rewrite: {(rewrite or {}).get('llm_latency_ms', 0)} ms",
-            f"Gold Teacher: {teacher_route.get('latency_ms', 0)} ms",
-            f"Voice Matched: {voice_matched_route.get('latency_ms', 0)} ms",
+            "Gold Teacher: hidden",
+            f"Qwen Voice Copy: {voice_matched_route.get('latency_ms', 0)} ms",
             f"TTS Total: {(tts or {}).get('latency_ms', 0)} ms",
             f"Total: {result.get('total_latency_ms', 0)} ms",
         ]
@@ -279,10 +283,8 @@ def run_eval():
 
 def build_demo() -> gr.Blocks:
     caps = get_demo_capabilities()
-    provider_choices = ["openvoice", "rvc"]
-    default_provider = str(caps.get("voice_conversion_provider") or "openvoice").strip().lower()
-    if default_provider in {"qwen_voice_clone", "qwen_vc", "qwen"}:
-        default_provider = "openvoice"
+    provider_choices = ["qwen_voice_clone"]
+    default_provider = str(caps.get("voice_conversion_provider") or "qwen_voice_clone").strip().lower()
     if default_provider not in provider_choices:
         provider_choices.insert(0, default_provider)
 
@@ -293,7 +295,7 @@ def build_demo() -> gr.Blocks:
             f"FFmpeg 可用：`{caps['ffmpeg_available']}`  \n"
             f"ASR 默认链路：`{caps.get('asr_provider', 'api_first')}` / `{caps.get('asr_cloud_model', '')}`；"
             f"API Key：`{caps.get('asr_cloud_api_key_configured', False)}`  \n"
-            f"Voice Matched 默认 Provider：`{default_provider}`；模式：`teacher_audio_to_audio`  \n"
+            f"Qwen Voice Copy Provider：`{default_provider}`；模式：`qwen_voice_clone_api`  \n"
             f"参考音频策略：`{caps.get('reference_audio_strategy', 'vad_concat')}`；建议时长："
             f"`{caps.get('speaker_ref_audio_min_s', 10)}-{caps.get('speaker_ref_audio_max_s', 20)}s`  \n"
             f"{caps['microphone_hint']}"
@@ -306,25 +308,25 @@ def build_demo() -> gr.Blocks:
                         speaker_ref_audio = gr.Audio(
                             sources=["upload", "microphone"],
                             type="filepath",
-                            label="音色参考音频（用于 Voice Matched，可选）",
+                            label="音色参考音频（用于 Qwen Voice Copy，可选）",
                         )
                         with gr.Group():
-                            gr.Markdown("### 音色迁移 / Voice Matched")
-                            voice_clone_enabled = gr.Checkbox(value=True, label="启用 Voice Matched 音色迁移")
+                            gr.Markdown("### Qwen Voice Copy")
+                            voice_clone_enabled = gr.Checkbox(value=True, label="启用 Qwen 声音复刻")
                             voice_clone_provider = gr.Dropdown(
                                 choices=provider_choices,
                                 value=default_provider,
-                                label="Voice Matched Provider",
+                                label="Voice Copy Provider",
                             )
                             gr.Markdown(
-                                "Voice Matched 只走 teacher_audio_to_audio：Gold Teacher 是 source，参考音频是 target speaker。"
-                                "Qwen Text Clone 只作为对照项，不作为 Voice Matched。"
+                                "公网主链路直接使用 Qwen voice enrollment + qwen3-tts-vc 合成最终方言克隆音频。"
+                                "没有参考音频时会明确回退到普通 Qwen TTS。"
                             )
                         with gr.Group():
                             gr.Markdown("### 文本与 TTS")
                             enable_punc = gr.Checkbox(value=True, label="启用标点增强")
-                            enable_tts = gr.Checkbox(value=True, label="启用 Gold Teacher / TTS")
-                            voice = gr.Dropdown(choices=["Kiki", "Rocky"], value="Kiki", label="Gold Teacher 系统音色")
+                            enable_tts = gr.Checkbox(value=True, label="启用 Qwen Voice Copy / TTS")
+                            voice = gr.Dropdown(choices=["Kiki", "Rocky"], value="Kiki", label="普通 TTS 兜底音色")
                             target_dialect = gr.Dropdown(choices=list(DIALECT_CHOICES), value="粤语", label="目标方言")
                             segment_max_len = gr.Slider(16, 48, value=28, step=1, label="分段长度")
                         run_btn = gr.Button("开始转换", variant="primary")
@@ -332,12 +334,12 @@ def build_demo() -> gr.Blocks:
                         recommendation_md = gr.Markdown(label="试听建议")
                         with gr.Row():
                             with gr.Column():
-                                teacher_audio = gr.Audio(label="Gold Teacher 方言音频")
-                                teacher_download_audio = gr.File(label="下载 Gold Teacher 音频")
-                                teacher_card_md = gr.Markdown()
+                                teacher_audio = gr.Audio(label="Gold Teacher 内部兜底音频", visible=False)
+                                teacher_download_audio = gr.File(label="下载 Gold Teacher 音频", visible=False)
+                                teacher_card_md = gr.Markdown(visible=False)
                             with gr.Column():
-                                voice_matched_audio = gr.Audio(label="Voice Matched 音色迁移音频")
-                                voice_matched_download_audio = gr.File(label="下载 Voice Matched 音频")
+                                voice_matched_audio = gr.Audio(label="最终方言克隆音频")
+                                voice_matched_download_audio = gr.File(label="下载最终方言克隆音频")
                                 voice_matched_card_md = gr.Markdown()
                         text_compare_md = gr.Markdown()
                         teacher_input_text = gr.Textbox(label="Qwen TTS teacher 输入文本", lines=4)
@@ -351,7 +353,7 @@ def build_demo() -> gr.Blocks:
                         reviewed_text = gr.Textbox(label="审查后语义普通话", lines=3)
                         tn_text = gr.Textbox(label="Rewrite 前文本", lines=3)
                         pivot_text = gr.Textbox(label="Pivot 中文", lines=3)
-                        yue_text = gr.Textbox(label="方言发声文本（参与 Gold Teacher）", lines=4)
+                        yue_text = gr.Textbox(label="方言发声文本（用于 Qwen 克隆合成前的清洗候选）", lines=4)
                         cultural_cards_md = gr.Markdown()
                         pronunciation_text = gr.Textbox(label="发音转写文本", lines=4)
                         prosody_text = gr.Textbox(label="韵律润色文本", lines=4)

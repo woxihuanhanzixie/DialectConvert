@@ -27,10 +27,10 @@ def _load_env_file() -> None:
 
 
 def _voice_match_provider_from_env() -> str:
-    provider = os.getenv("VOICE_MATCH_PROVIDER", os.getenv("VOICE_CONVERSION_PROVIDER", "none")).strip().lower()
-    if provider in {"qwen_voice_clone", "qwen_vc", "qwen"}:
-        return os.getenv("TEACHER_FIRST_VOICE_MATCH_PROVIDER", "none").strip().lower()
-    return provider or "none"
+    explicit = os.getenv("VOICE_MATCH_PROVIDER", "").strip().lower()
+    if explicit:
+        return explicit
+    return os.getenv("VOICE_CONVERSION_PROVIDER", "qwen_voice_clone").strip().lower() or "qwen_voice_clone"
 
 
 @dataclass
@@ -106,15 +106,15 @@ class Step2Config:
                 "QWEN_TTS_TEACHER_INSTRUCTIONS",
                 "用自然、连贯、口语化的广东通用粤语播报，句中连接平滑，停顿轻一点，整体比普通朗读更顺。",
             ).strip(),
-            voice_clone_provider=os.getenv("VOICE_CLONE_PROVIDER", "qwen_vc").strip(),
-            text_clone_provider=os.getenv("TEXT_CLONE_PROVIDER", os.getenv("VOICE_CLONE_PROVIDER", "qwen_vc")).strip(),
+            voice_clone_provider=os.getenv("VOICE_CLONE_PROVIDER", "qwen_voice_clone").strip(),
+            text_clone_provider=os.getenv("TEXT_CLONE_PROVIDER", os.getenv("VOICE_CLONE_PROVIDER", "qwen_voice_clone")).strip(),
             voice_conversion_provider=_voice_match_provider_from_env(),
             qwen_voice_enrollment_model=os.getenv("QWEN_VOICE_ENROLLMENT_MODEL", "qwen-voice-enrollment").strip(),
             qwen_voice_target_model=os.getenv(
                 "QWEN_VOICE_TARGET_MODEL",
                 os.getenv("QWEN_TTS_VC_MODEL", "qwen3-tts-vc-2026-01-22"),
             ).strip(),
-            voice_conversion_mode=os.getenv("VOICE_CONVERSION_MODE", "teacher_audio_to_audio").strip(),
+            voice_conversion_mode=os.getenv("VOICE_CONVERSION_MODE", "qwen_voice_clone_api").strip(),
             voice_conversion_model=os.getenv("VOICE_CONVERSION_MODEL", "").strip(),
             voice_conversion_device=os.getenv("VOICE_CONVERSION_DEVICE", "cpu").strip(),
             qwen_tts_vc_model=os.getenv(

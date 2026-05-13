@@ -11,7 +11,7 @@
     <header class="topbar">
       <div>
         <p class="project">声临其境 Demo1</p>
-        <h1>Gold Teacher 方言语音工作台</h1>
+        <h1>声音复刻方言语音工作台</h1>
       </div>
       <div class="status-pill" id="service-status">服务待检测</div>
     </header>
@@ -26,6 +26,11 @@
         <label class="field file-field">
           <span>主音频</span>
           <input id="input-audio" type="file" accept="audio/*" capture>
+        </label>
+
+        <label class="field file-field">
+          <span>音色参考音频</span>
+          <input id="speaker-ref-audio" type="file" accept="audio/*">
         </label>
 
         <label class="field">
@@ -54,13 +59,13 @@
 
         <div class="stable-route">
           <div>
-            <strong>API-first 链路</strong>
-            <p>公网主链路使用云 ASR、LLM 改写和 Qwen Gold Teacher，优先保证可演示的稳定发音结果。</p>
+            <strong>API-only 声音复刻链路</strong>
+            <p>公网主链路使用云 ASR、LLM 改写和 Qwen 声音复刻，优先生成“像参考声音说方言”的结果。</p>
           </div>
-          <span>云端</span>
+          <span>API</span>
         </div>
 
-        <button id="submit-btn" type="submit">生成 Gold Teacher</button>
+        <button id="submit-btn" type="submit">生成复刻方言语音</button>
         <p id="status-text" class="status idle">等待输入</p>
       </form>
 
@@ -83,13 +88,21 @@
         <div class="audio-row single">
           <article class="audio-box primary">
             <div class="box-head">
-              <h2>Gold Teacher</h2>
+              <h2>声音复刻方言音频</h2>
+              <a id="cloned-download" class="download-link hidden" href="#" download>下载</a>
+            </div>
+            <audio id="cloned-audio" controls preload="none"></audio>
+            <p id="cloned-note">上传参考音频后显示复刻音色的方言输出。</p>
+          </article>
+
+          <article class="audio-box hidden-panel" aria-hidden="true">
+            <div class="box-head">
+              <h2>Gold Teacher 参考音频</h2>
               <a id="gold-download" class="download-link hidden" href="#" download>下载</a>
             </div>
             <audio id="gold-audio" controls preload="none"></audio>
-            <p id="gold-note">生成后显示系统方言发音参考。</p>
+            <p id="gold-note">复刻失败或未上传参考音频时作为兜底。</p>
           </article>
-
         </div>
 
         <div class="error-line" id="error-text">无错误</div>
