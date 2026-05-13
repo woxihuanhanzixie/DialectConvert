@@ -2,6 +2,7 @@ fastapi>=0.115
 uvicorn>=0.30
 python-multipart>=0.0.9
 dashscope>=1.25.17
+websocket-client>=1.8.0
 numpy==1.26.1
 soundfile==0.12.1
 cn2an==0.5.23

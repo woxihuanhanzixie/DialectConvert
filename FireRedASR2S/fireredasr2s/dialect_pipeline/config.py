@@ -30,7 +30,7 @@ def _voice_match_provider_from_env() -> str:
     explicit = os.getenv("VOICE_MATCH_PROVIDER", "").strip().lower()
     if explicit:
         return explicit
-    return os.getenv("VOICE_CONVERSION_PROVIDER", "qwen_voice_clone").strip().lower() or "qwen_voice_clone"
+    return os.getenv("VOICE_CONVERSION_PROVIDER", "cosyvoice").strip().lower() or "cosyvoice"
 
 
 @dataclass
@@ -63,6 +63,15 @@ class Step2Config:
     qwen_tts_vc_model: str
     qwen_tts_customization_path: str
     qwen_voice_cache_dir: Path
+    cosyvoice_base_url: str
+    cosyvoice_ws_url: str
+    cosyvoice_enrollment_model: str
+    cosyvoice_target_model: str
+    cosyvoice_system_voice: str
+    cosyvoice_audio_format: str
+    cosyvoice_sample_rate: int
+    cosyvoice_voice_cache_dir: Path
+    cosyvoice_ref_audio_dir: Path
     speaker_ref_audio_min_s: float
     speaker_ref_audio_max_s: float
     speaker_ref_keep_raw: bool
@@ -106,8 +115,8 @@ class Step2Config:
                 "QWEN_TTS_TEACHER_INSTRUCTIONS",
                 "用自然、连贯、口语化的广东通用粤语播报，句中连接平滑，停顿轻一点，整体比普通朗读更顺。",
             ).strip(),
-            voice_clone_provider=os.getenv("VOICE_CLONE_PROVIDER", "qwen_voice_clone").strip(),
-            text_clone_provider=os.getenv("TEXT_CLONE_PROVIDER", os.getenv("VOICE_CLONE_PROVIDER", "qwen_voice_clone")).strip(),
+            voice_clone_provider=os.getenv("VOICE_CLONE_PROVIDER", "cosyvoice").strip(),
+            text_clone_provider=os.getenv("TEXT_CLONE_PROVIDER", os.getenv("VOICE_CLONE_PROVIDER", "cosyvoice")).strip(),
             voice_conversion_provider=_voice_match_provider_from_env(),
             qwen_voice_enrollment_model=os.getenv("QWEN_VOICE_ENROLLMENT_MODEL", "qwen-voice-enrollment").strip(),
             qwen_voice_target_model=os.getenv(
@@ -124,6 +133,19 @@ class Step2Config:
             qwen_tts_customization_path=os.getenv("QWEN_TTS_CUSTOMIZATION_PATH", "/services/audio/tts/customization").strip(),
             qwen_voice_cache_dir=Path(
                 os.getenv("QWEN_VOICE_CACHE_DIR", str(root / "runtime_data" / "step2_output" / "voice_cache"))
+            ),
+            cosyvoice_base_url=os.getenv("COSYVOICE_BASE_URL", "https://dashscope.aliyuncs.com/api/v1").rstrip("/"),
+            cosyvoice_ws_url=os.getenv("COSYVOICE_WS_URL", "wss://dashscope.aliyuncs.com/api-ws/v1/inference/").strip(),
+            cosyvoice_enrollment_model=os.getenv("COSYVOICE_ENROLLMENT_MODEL", "voice-enrollment").strip(),
+            cosyvoice_target_model=os.getenv("COSYVOICE_TARGET_MODEL", "cosyvoice-v3-flash").strip(),
+            cosyvoice_system_voice=os.getenv("COSYVOICE_SYSTEM_VOICE", "longanyang").strip(),
+            cosyvoice_audio_format=os.getenv("COSYVOICE_AUDIO_FORMAT", "mp3").strip().lower(),
+            cosyvoice_sample_rate=int(os.getenv("COSYVOICE_SAMPLE_RATE", "22050")),
+            cosyvoice_voice_cache_dir=Path(
+                os.getenv("COSYVOICE_VOICE_CACHE_DIR", str(root / "runtime_data" / "step2_output" / "cosyvoice_cache"))
+            ),
+            cosyvoice_ref_audio_dir=Path(
+                os.getenv("COSYVOICE_REF_AUDIO_DIR", str(root / "runtime_data" / "step2_output" / "ref_audio"))
             ),
             speaker_ref_audio_min_s=float(os.getenv("SPEAKER_REF_AUDIO_MIN_S", "10")),
             speaker_ref_audio_max_s=float(os.getenv("SPEAKER_REF_AUDIO_MAX_S", "20")),

@@ -96,6 +96,7 @@ class TtsRouteResponse(BaseModel):
     expires_at: str = ""
     tts_model: str = ""
     tts_voice: str = ""
+    voice_id: str = ""
     latency_ms: float = 0.0
     error: str = ""
     input_text: str = ""
@@ -180,6 +181,7 @@ class TtsResponse(BaseModel):
     voice_matched: TtsRouteResponse | None = None
     cloned_dialect: TtsRouteResponse | None = None
     qwen_cloned_dialect: TtsRouteResponse | None = None
+    cosyvoice_fallback: TtsRouteResponse | None = None
     legacy_text_clone: TtsRouteResponse | None = None
     recommended_main_output: str = "qwen_cloned_dialect"
     voice_match_summary: VoiceMatchSummaryResponse | None = None
