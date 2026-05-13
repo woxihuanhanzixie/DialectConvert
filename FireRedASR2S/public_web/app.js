@@ -14,15 +14,18 @@ const els = {
   goldAudio: document.getElementById("gold-audio"),
   goldDownload: document.getElementById("gold-download"),
   goldNote: document.getElementById("gold-note"),
-  matchedAudio: document.getElementById("matched-audio"),
-  matchedDownload: document.getElementById("matched-download"),
-  matchedNote: document.getElementById("matched-note"),
   asrText: document.getElementById("asr-text"),
   reviewedText: document.getElementById("reviewed-text"),
   semanticText: document.getElementById("semantic-text"),
   pronunciationText: document.getElementById("pronunciation-text"),
   prosodyText: document.getElementById("prosody-text"),
   culturalCards: document.getElementById("cultural-cards"),
+  finalHitCount: document.getElementById("final-hit-count"),
+  pronHitCount: document.getElementById("pron-hit-count"),
+  prosodyHitCount: document.getElementById("prosody-hit-count"),
+  ragHitRate: document.getElementById("rag-hit-rate"),
+  ragLatency: document.getElementById("rag-latency"),
+  ragSimilarity: document.getElementById("rag-similarity"),
 };
 
 const API_BASE = (() => {
@@ -43,9 +46,9 @@ function setStatus(message, state) {
 function routeLabel(value) {
   const labels = {
     gold_teacher: "Gold Teacher",
-    voice_matched: "Voice Matched",
+    voice_matched: "Gold Teacher",
     baseline: "Gold Teacher",
-    clone: "Voice Matched",
+    clone: "Gold Teacher",
   };
   return labels[value] || value || "Gold Teacher";
 }
@@ -81,10 +84,105 @@ function renderCulturalCards(cards) {
     .map((card) => {
       const title = card.term || card.id || "方言词";
       const note = card.cultural_note || card.meaning || "";
-      const example = card.usage_example ? `例：${card.usage_example}` : "";
-      return [title, note, example].filter(Boolean).join("\n");
+      const meaning = card.meaning || "暂无词义";
+      const example = card.usage_example || "暂无例句";
+      const register = card.register || "口语";
+      const source = card.source_label || "资料整理";
+      return `
+        <button class="culture-chip" type="button" aria-label="${escapeHtml(title)}">
+          ${escapeHtml(title)}
+          <span class="culture-popover" role="tooltip">
+            <strong>${escapeHtml(title)}</strong>
+            <em>${escapeHtml(register)}</em>
+            <span>词义：${escapeHtml(meaning)}</span>
+            <span>文化说明：${escapeHtml(note || "暂无说明")}</span>
+            <span>例句：${escapeHtml(example)}</span>
+            <small>${escapeHtml(source)}</small>
+          </span>
+        </button>
+      `;
     })
-    .join("\n\n");
+    .join("");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function hitCount(items) {
+  if (!Array.isArray(items)) return 0;
+  return items.reduce((total, item) => total + Math.max(1, Number(item?.count || 0) || 0), 0);
+}
+
+function pickFirstNumber(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
+}
+
+function ragHits(rewrite) {
+  const hits = [];
+  for (const key of ["rag_hits", "pronunciation_rag_hits"]) {
+    if (Array.isArray(rewrite?.[key])) hits.push(...rewrite[key]);
+  }
+  return hits;
+}
+
+function formatPercent(value) {
+  if (!Number.isFinite(value)) return "-";
+  const normalized = value <= 1 ? value * 100 : value;
+  return `${normalized.toFixed(normalized >= 10 ? 1 : 2)}%`;
+}
+
+function formatMs(value) {
+  if (!Number.isFinite(value)) return "-";
+  return `${Math.round(value)} ms`;
+}
+
+function updateStats(rewrite) {
+  const pronCount = hitCount(rewrite?.pronunciation_rule_hits);
+  const prosodyCount = hitCount(rewrite?.prosody_rule_hits);
+  const hits = ragHits(rewrite || {});
+  const ragCount = hits.length;
+  const queryCount = pickFirstNumber(
+    rewrite?.rag_query_count,
+    rewrite?.pronunciation_rag_query_count,
+    rewrite?.rag_total
+  );
+  const explicitRate = pickFirstNumber(
+    rewrite?.rag_hit_rate,
+    rewrite?.pronunciation_rag_hit_rate,
+    rewrite?.rag_recall_rate
+  );
+  const latency = pickFirstNumber(rewrite?.rag_latency_ms, rewrite?.pronunciation_rag_latency_ms, rewrite?.rag_elapsed_ms);
+  let similarity = pickFirstNumber(rewrite?.rag_semantic_similarity, rewrite?.rag_avg_similarity, rewrite?.rag_top_score);
+  if (similarity === null) {
+    const scores = hits
+      .map((hit) => pickFirstNumber(hit?.semantic_similarity, hit?.similarity, hit?.score))
+      .filter((value) => value !== null);
+    if (scores.length) similarity = Math.max(...scores);
+  }
+
+  els.pronHitCount.textContent = String(pronCount);
+  els.prosodyHitCount.textContent = String(prosodyCount);
+  els.finalHitCount.textContent = String(pronCount + prosodyCount + ragCount);
+  if (explicitRate !== null) {
+    els.ragHitRate.textContent = formatPercent(explicitRate);
+  } else if (queryCount !== null && queryCount > 0) {
+    els.ragHitRate.textContent = formatPercent(ragCount / queryCount);
+  } else {
+    els.ragHitRate.textContent = ragCount > 0 ? "已命中" : "未启用";
+  }
+  els.ragLatency.textContent = formatMs(latency);
+  els.ragSimilarity.textContent = similarity === null ? "-" : formatPercent(similarity);
 }
 
 function resetOutputs() {
@@ -92,6 +190,7 @@ function resetOutputs() {
   els.totalLatency.textContent = "-";
   els.traceId.textContent = "-";
   els.errorText.textContent = "无错误";
+  updateStats({});
 }
 
 async function checkHealth() {
@@ -144,7 +243,6 @@ async function submitPipeline(event) {
 
     const tts = payload.tts || {};
     const goldTeacher = tts.gold_teacher || {};
-    const voiceMatched = tts.voice_matched || {};
     const asr = payload.asr || {};
     const review = payload.review || {};
     const rewrite = payload.rewrite || {};
@@ -152,16 +250,16 @@ async function submitPipeline(event) {
     els.recommendedOutput.textContent = routeLabel(tts.recommended_main_output);
     els.totalLatency.textContent = `${Math.round(payload.total_latency_ms || 0)} ms`;
     els.traceId.textContent = payload.trace_id || "-";
-    els.errorText.textContent = voiceMatched.error || goldTeacher.error || "无错误";
+    els.errorText.textContent = goldTeacher.error || "无错误";
     els.asrText.textContent = asr.punc_text || asr.text || (mainAudio ? "-" : "文本输入，无 ASR");
     els.reviewedText.textContent = review.asr_reviewed_text || "-";
     els.semanticText.textContent = rewrite.semantic_text || rewrite.dialect_text || "-";
     els.pronunciationText.textContent = rewrite.pronunciation_text || "-";
     els.prosodyText.textContent = rewrite.prosody_text || "-";
-    els.culturalCards.textContent = renderCulturalCards(rewrite.cultural_cards);
+    els.culturalCards.innerHTML = renderCulturalCards(rewrite.cultural_cards);
+    updateStats(rewrite);
 
     setAudioCard(els.goldAudio, els.goldDownload, els.goldNote, goldTeacher, "Gold Teacher 暂未生成。");
-    setAudioCard(els.matchedAudio, els.matchedDownload, els.matchedNote, voiceMatched, "公网稳定版默认关闭。");
     setStatus("处理完成。", "success");
   } catch (error) {
     const message = error instanceof Error ? error.message : "请求失败";

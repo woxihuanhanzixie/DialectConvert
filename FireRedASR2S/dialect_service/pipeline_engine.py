@@ -114,10 +114,27 @@ class DialectPipelineEngine:
             return rewrite
         except Exception as exc:  # noqa: BLE001
             return {
+                "source_text": "",
+                "tn_text": "",
+                "rewrite_segments": [],
                 "dialect_text": "",
                 "semantic_text": "",
                 "pronunciation_text": "",
                 "prosody_text": "",
+                "pronunciation_mode": "rule_first",
+                "pronunciation_rule_hits": [],
+                "pronunciation_hit_categories": [],
+                "pronunciation_fallback_used": False,
+                "pronunciation_notes": "",
+                "prosody_mode": "rule_plus_llm",
+                "prosody_rule_hits": [],
+                "prosody_hit_categories": [],
+                "prosody_fallback_used": False,
+                "prosody_notes": "",
+                "cultural_cards": [],
+                "cultural_card_terms": [],
+                "degrade_mode": True,
+                "llm_model": "unknown",
                 "target_dialect": self.cfg.default_target_dialect,
                 "dialect_style": self.cfg.default_dialect_style,
                 "llm_latency_ms": 0.0,
@@ -146,10 +163,27 @@ class DialectPipelineEngine:
             return rewrite
         except TimeoutError:
             return {
+                "source_text": "",
+                "tn_text": "",
+                "rewrite_segments": [],
                 "dialect_text": "方言展示文本仍在生成，主音频链路未等待该步骤。",
                 "semantic_text": "方言展示文本仍在生成，主音频链路未等待该步骤。",
                 "pronunciation_text": "",
                 "prosody_text": "",
+                "pronunciation_mode": "rule_first",
+                "pronunciation_rule_hits": [],
+                "pronunciation_hit_categories": [],
+                "pronunciation_fallback_used": False,
+                "pronunciation_notes": "",
+                "prosody_mode": "rule_plus_llm",
+                "prosody_rule_hits": [],
+                "prosody_hit_categories": [],
+                "prosody_fallback_used": False,
+                "prosody_notes": "",
+                "cultural_cards": [],
+                "cultural_card_terms": [],
+                "degrade_mode": True,
+                "llm_model": "unknown",
                 "target_dialect": self.cfg.default_target_dialect,
                 "dialect_style": self.cfg.default_dialect_style,
                 "llm_latency_ms": 0.0,
@@ -681,25 +715,12 @@ class DialectPipelineEngine:
             return_timestamp=True,
         )
         if asr_result is None:
-            from asr_service.asr_engine import get_asr_engine
-            from asr_service.system_engine import get_asr_system_engine
-
-            local_asr_path = Path(wav_path)
-            if local_asr_path.suffix.lower() != ".wav":
-                local_asr_path, _ = normalize_file_to_wav(
-                    local_asr_path,
-                    make_temp_dir(prefix="demo1_local_asr_fallback_"),
+            if not self._local_asr_enabled(asr_cfg):
+                raise RuntimeError(
+                    "Cloud ASR failed in API-only mode; local FireRed ASR fallback is disabled. "
+                    f"Reason: {cloud_asr_error}"
                 )
-            try:
-                asr_result = get_asr_system_engine().process_file(local_asr_path, enable_vad=True, enable_lid=True, enable_punc=enable_punc)
-                asr_result["asr_provider"] = "local_firered_system"
-            except Exception:
-                asr_result = get_asr_engine().transcribe_file(local_asr_path, enable_punc=enable_punc, return_timestamp=True)
-                asr_result["detected_languages"] = []
-                asr_result["vad_segments_ms"] = []
-                asr_result["sentences"] = []
-                asr_result["words"] = []
-                asr_result["asr_provider"] = "local_firered_plain"
+            asr_result = self._transcribe_with_local_fallback(wav_path, asr_cfg, enable_punc=enable_punc)
             asr_result["cloud_asr_error"] = cloud_asr_error
         asr_text = asr_result.get("punc_text") or asr_result.get("text", "")
         input_lang = self._pick_input_lang(asr_result)
@@ -913,6 +934,32 @@ class DialectPipelineEngine:
 
     def _build_wav_path(self, stem: str) -> Path:
         return self.cfg.output_dir / "audio" / f"{stem}.wav"
+
+    def _local_asr_enabled(self, cfg: AsrServiceConfig) -> bool:
+        return bool(cfg.enable_local_asr_fallback and not cfg.disable_local_asr and cfg.provider != "api_only")
+
+    def _transcribe_with_local_fallback(self, wav_path: str | Path, cfg: AsrServiceConfig, *, enable_punc: bool) -> dict[str, Any]:
+        from asr_service.asr_engine import get_asr_engine
+        from asr_service.system_engine import get_asr_system_engine
+
+        local_asr_path = Path(wav_path)
+        if local_asr_path.suffix.lower() != ".wav":
+            local_asr_path, _ = normalize_file_to_wav(
+                local_asr_path,
+                make_temp_dir(prefix="demo1_local_asr_fallback_"),
+            )
+        try:
+            asr_result = get_asr_system_engine().process_file(local_asr_path, enable_vad=True, enable_lid=True, enable_punc=enable_punc)
+            asr_result["asr_provider"] = "local_firered_system"
+            return asr_result
+        except Exception:
+            asr_result = get_asr_engine().transcribe_file(local_asr_path, enable_punc=enable_punc, return_timestamp=True)
+            asr_result["detected_languages"] = []
+            asr_result["vad_segments_ms"] = []
+            asr_result["sentences"] = []
+            asr_result["words"] = []
+            asr_result["asr_provider"] = "local_firered_plain"
+            return asr_result
 
     def _audio_meta(self, wav_path: str) -> dict[str, Any] | None:
         if not wav_path:

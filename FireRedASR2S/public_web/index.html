@@ -54,10 +54,10 @@
 
         <div class="stable-route">
           <div>
-            <strong>Voice Matched</strong>
-            <p>2C2G 公网首版默认回退 Gold Teacher，避免文本克隆冒充 teacher-first 音色迁移。</p>
+            <strong>API-first 链路</strong>
+            <p>公网主链路使用云 ASR、LLM 改写和 Qwen Gold Teacher，优先保证可演示的稳定发音结果。</p>
           </div>
-          <span>关闭</span>
+          <span>云端</span>
         </div>
 
         <button id="submit-btn" type="submit">生成 Gold Teacher</button>
@@ -80,7 +80,7 @@
           </div>
         </div>
 
-        <div class="audio-row">
+        <div class="audio-row single">
           <article class="audio-box primary">
             <div class="box-head">
               <h2>Gold Teacher</h2>
@@ -90,18 +90,37 @@
             <p id="gold-note">生成后显示系统方言发音参考。</p>
           </article>
 
-          <article class="audio-box">
-            <div class="box-head">
-              <h2>Voice Matched</h2>
-              <a id="matched-download" class="download-link hidden" href="#" download>下载</a>
-            </div>
-            <audio id="matched-audio" controls preload="none"></audio>
-            <p id="matched-note">公网稳定版默认关闭。</p>
-          </article>
         </div>
 
         <div class="error-line" id="error-text">无错误</div>
       </section>
+    </section>
+
+    <section class="metrics">
+      <article>
+        <span>最终命中次数</span>
+        <strong id="final-hit-count">0</strong>
+      </article>
+      <article>
+        <span>发音规则</span>
+        <strong id="pron-hit-count">0</strong>
+      </article>
+      <article>
+        <span>韵律规则</span>
+        <strong id="prosody-hit-count">0</strong>
+      </article>
+      <article>
+        <span>RAG 命中率</span>
+        <strong id="rag-hit-rate">未启用</strong>
+      </article>
+      <article>
+        <span>RAG 耗时</span>
+        <strong id="rag-latency">-</strong>
+      </article>
+      <article>
+        <span>语义相似度</span>
+        <strong id="rag-similarity">-</strong>
+      </article>
     </section>
 
     <section class="details">
@@ -125,9 +144,9 @@
         <h3>韵律提示层</h3>
         <p id="prosody-text">-</p>
       </article>
-      <article>
-        <h3>文化百科卡片</h3>
-        <p id="cultural-cards">-</p>
+      <article class="culture-panel">
+        <h3>文化百科悬浮卡</h3>
+        <div id="cultural-cards" class="culture-card-list">-</div>
       </article>
     </section>
   </main>

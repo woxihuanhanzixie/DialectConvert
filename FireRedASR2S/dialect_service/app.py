@@ -201,7 +201,7 @@ async def pipeline(
     target_dialect: str = Form(default="yue"),
     dialect_style: str = Form(default=""),
     voice_clone_enabled: bool = Form(default=True),
-    voice_clone_provider: str = Form(default="openvoice"),
+    voice_clone_provider: str = Form(default="none"),
 ) -> PipelineResponse:
     engine = get_pipeline_engine()
     dialect_style = _validate_dialect(target_dialect, dialect_style)

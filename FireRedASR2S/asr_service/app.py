@@ -3,11 +3,9 @@ from __future__ import annotations
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
 from .audio_io import AudioNormalizeError, get_runtime_capabilities, make_temp_dir, normalize_upload_to_wav
-from .asr_engine import get_asr_engine
 from .cloud_asr import DashScopeAsrEngine, transcribe_api_first
 from .config import AsrServiceConfig
 from .schemas import AsrResponse, AudioNormalizeResponse, ErrorResponse, HealthResponse
-from .system_engine import get_asr_system_engine
 
 
 app = FastAPI(
@@ -20,14 +18,27 @@ app = FastAPI(
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
     cfg = AsrServiceConfig.from_env()
+    local_enabled = _local_asr_enabled(cfg)
+    local_health = {
+        "enabled": False,
+        "reason": "API-only mode; local FireRed ASR is disabled by default.",
+    }
+    if local_enabled:
+        from .asr_engine import get_asr_engine
+        from .system_engine import get_asr_system_engine
+
+        local_health = {
+            "enabled": True,
+            "plain_asr": get_asr_engine().health(),
+            "asr_system": get_asr_system_engine().health(),
+        }
     return HealthResponse(
         status="ok",
         capabilities=get_runtime_capabilities(),
         engine={
             "provider": cfg.provider,
             "cloud_asr": DashScopeAsrEngine(cfg).health(),
-            "plain_asr": get_asr_engine().health(),
-            "asr_system": get_asr_system_engine().health(),
+            "local_asr": local_health,
         },
     )
 
@@ -71,25 +82,23 @@ async def transcribe(
             return_timestamp=return_timestamp,
         )
         if result is None:
-            try:
-                result = get_asr_system_engine().process_file(
-                    wav_path,
-                    enable_vad=enable_vad,
-                    enable_lid=enable_lid,
-                    enable_punc=enable_punc,
+            if not _local_asr_enabled(cfg):
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        "error_code": "CLOUD_ASR_FAILED",
+                        "message": cloud_error or "Cloud ASR failed.",
+                        "asr_provider": cfg.provider,
+                        "local_firered_disabled": True,
+                    },
                 )
-                result["asr_provider"] = "local_firered_system"
-            except Exception:
-                result = get_asr_engine().transcribe_file(
-                    wav_path,
-                    enable_punc=enable_punc,
-                    return_timestamp=return_timestamp,
-                )
-                result["detected_languages"] = []
-                result["vad_segments_ms"] = []
-                result["sentences"] = []
-                result["words"] = []
-                result["asr_provider"] = "local_firered_plain"
+            result = _transcribe_with_local_fallback(
+                wav_path,
+                enable_vad=enable_vad,
+                enable_lid=enable_lid,
+                enable_punc=enable_punc,
+                return_timestamp=return_timestamp,
+            )
             result["cloud_asr_error"] = cloud_error
         result["audio_quality"] = (meta.get("audio_frontend") or {}).get("work_audio")
         return AsrResponse(**result, audio_meta=meta)
@@ -97,3 +106,41 @@ async def transcribe(
         raise HTTPException(status_code=400, detail=e.to_detail()) from e
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail={"error_code": "ASR_ENGINE_ERROR", "message": str(e)}) from e
+
+
+def _local_asr_enabled(cfg: AsrServiceConfig) -> bool:
+    return bool(cfg.enable_local_asr_fallback and not cfg.disable_local_asr and cfg.provider != "api_only")
+
+
+def _transcribe_with_local_fallback(
+    wav_path,
+    *,
+    enable_vad: bool,
+    enable_lid: bool,
+    enable_punc: bool,
+    return_timestamp: bool,
+) -> dict:
+    from .asr_engine import get_asr_engine
+    from .system_engine import get_asr_system_engine
+
+    try:
+        result = get_asr_system_engine().process_file(
+            wav_path,
+            enable_vad=enable_vad,
+            enable_lid=enable_lid,
+            enable_punc=enable_punc,
+        )
+        result["asr_provider"] = "local_firered_system"
+        return result
+    except Exception:
+        result = get_asr_engine().transcribe_file(
+            wav_path,
+            enable_punc=enable_punc,
+            return_timestamp=return_timestamp,
+        )
+        result["detected_languages"] = []
+        result["vad_segments_ms"] = []
+        result["sentences"] = []
+        result["words"] = []
+        result["asr_provider"] = "local_firered_plain"
+        return result

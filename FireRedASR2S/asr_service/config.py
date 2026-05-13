@@ -48,6 +48,8 @@ class AsrServiceConfig:
     enable_vad_default: bool
     enable_lid_default: bool
     frontend_mode_default: str
+    disable_local_asr: bool
+    enable_local_asr_fallback: bool
 
     @classmethod
     def from_env(cls) -> "AsrServiceConfig":
@@ -58,7 +60,7 @@ class AsrServiceConfig:
         default_vad = root / "runtime_data" / "models" / "FireRedVAD" / "VAD"
         default_lid = root / "runtime_data" / "models" / "FireRedLID"
         return cls(
-            provider=os.getenv("ASR_PROVIDER", "api_first").strip().lower(),
+            provider=os.getenv("ASR_PROVIDER", "api_only").strip().lower(),
             cloud_provider=os.getenv("ASR_CLOUD_PROVIDER", "dashscope").strip().lower(),
             cloud_model=os.getenv("ASR_CLOUD_MODEL", "fun-asr-realtime-2026-02-28").strip(),
             cloud_api_key=os.getenv("ASR_CLOUD_API_KEY", os.getenv("DASHSCOPE_API_KEY", "")).strip(),
@@ -79,4 +81,6 @@ class AsrServiceConfig:
             enable_vad_default=os.getenv("ASR_ENABLE_VAD", "1") == "1",
             enable_lid_default=os.getenv("ASR_ENABLE_LID", "1") == "1",
             frontend_mode_default=os.getenv("AUDIO_FRONTEND_MODE", "light_asr_safe").strip(),
+            disable_local_asr=os.getenv("DISABLE_LOCAL_ASR", "1") == "1",
+            enable_local_asr_fallback=os.getenv("ENABLE_LOCAL_ASR_FALLBACK", "0") == "1",
         )

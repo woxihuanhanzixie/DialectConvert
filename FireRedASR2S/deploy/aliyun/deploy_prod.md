@@ -5,9 +5,10 @@
 - 国内公网轻前端：`public_web/`
 - 反向代理：`Nginx`
 - 主后端：`dialect_service`
-- 主语音能力：`Qwen/DashScope API`
+- 主语音能力：`DashScope/Qwen API`
+- ASR：公网默认 `api_only`，只走云 ASR
 - Voice Matched：首版公网稳定版默认关闭，页面清楚展示 Gold Teacher 回退
-- 本地模型：FireRed ASR、OpenVoice、RVC 只保留为后备/评测路线，不作为 2C2G 国内上线默认主链路
+- 本地模型：FireRed ASR、OpenVoice、RVC 只保留为后续手动恢复/评测路线，不作为国内上线默认主链路，也不在公网页面展示
 
 ## 推荐机器
 
@@ -58,6 +59,9 @@ VOICE_MATCH_PROVIDER=none
 VOICE_CONVERSION_PROVIDER=none
 VOICE_CLONE_PROVIDER=qwen_voice_clone
 TEXT_CLONE_PROVIDER=qwen_voice_clone
+ASR_PROVIDER=api_only
+DISABLE_LOCAL_ASR=1
+ENABLE_LOCAL_ASR_FALLBACK=0
 QWEN_VOICE_ENROLLMENT_MODEL=qwen-voice-enrollment
 QWEN_VOICE_TARGET_MODEL=qwen3-tts-vc-2026-01-22
 QWEN_TTS_VC_MODEL=qwen3-tts-vc-2026-01-22
@@ -66,6 +70,8 @@ SPEAKER_REF_AUDIO_MAX_S=20
 ```
 
 不要把 `VOICE_MATCH_PROVIDER` 设置为 `qwen_voice_clone`。该路线是 `文本 + 参考音频 -> 克隆语音`，会重新决定发音和韵律；当前公网首版必须保持 `Gold Teacher` 作为推荐主输出。
+
+不要开启 `ENABLE_LOCAL_ASR_FALLBACK`。当前公网版本的 ASR 只走 DashScope/Qwen API；FireRed 本地模型留在仓库中，后续需要时再单独恢复。
 
 ### 4. 启动后端
 
@@ -102,7 +108,9 @@ sudo systemctl reload nginx
 - 上传音频
 - 确认：
   - `Gold Teacher` 可播放
-  - `Voice Matched` 显示关闭或明确回退，不影响推荐主输出
+  - 页面展示 RAG 命中率/耗时/语义相似度看板
+  - 页面展示文化百科悬浮卡，鼠标悬停或聚焦可查看词义、文化说明和例句
+  - 页面不展示 FireRed 本地模型、OpenVoice、RVC、Voice Matched 控件
   - 三种方言选择可生效
 
 ## 成本回退建议

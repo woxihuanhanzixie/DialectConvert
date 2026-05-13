@@ -27,10 +27,10 @@ def _load_env_file() -> None:
 
 
 def _voice_match_provider_from_env() -> str:
-    provider = os.getenv("VOICE_MATCH_PROVIDER", os.getenv("VOICE_CONVERSION_PROVIDER", "openvoice")).strip().lower()
+    provider = os.getenv("VOICE_MATCH_PROVIDER", os.getenv("VOICE_CONVERSION_PROVIDER", "none")).strip().lower()
     if provider in {"qwen_voice_clone", "qwen_vc", "qwen"}:
-        return os.getenv("TEACHER_FIRST_VOICE_MATCH_PROVIDER", "openvoice").strip().lower()
-    return provider or "openvoice"
+        return os.getenv("TEACHER_FIRST_VOICE_MATCH_PROVIDER", "none").strip().lower()
+    return provider or "none"
 
 
 @dataclass

@@ -114,7 +114,7 @@ def transcribe_api_first(
     enable_punc: bool = True,
     return_timestamp: bool = True,
 ) -> tuple[dict[str, Any] | None, str]:
-    if cfg.provider not in {"api_first", "cloud_first", "dashscope", "qwen"}:
+    if cfg.provider not in {"api_only", "api_first", "cloud_first", "dashscope", "qwen"}:
         return None, "cloud_asr_disabled"
     try:
         result = DashScopeAsrEngine(cfg).transcribe_file(

@@ -266,6 +266,10 @@ button:disabled {
   gap: 12px;
 }
 
+.audio-row.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .audio-box {
   min-width: 0;
   padding: 14px;
@@ -318,9 +322,100 @@ audio {
   margin-top: 16px;
 }
 
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.metrics article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.metrics span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metrics strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .details article {
   min-width: 0;
   padding: 14px;
+}
+
+.culture-card-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.culture-chip {
+  position: relative;
+  width: auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #b8cdfb;
+  border-radius: 999px;
+  background: #f7faff;
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.culture-chip:hover,
+.culture-chip:focus {
+  background: #ecf3ff;
+}
+
+.culture-popover {
+  position: absolute;
+  z-index: 10;
+  bottom: calc(100% + 10px);
+  left: 0;
+  display: none;
+  width: min(320px, 80vw);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(23, 32, 44, 0.16);
+  color: var(--text);
+  text-align: left;
+}
+
+.culture-chip:hover .culture-popover,
+.culture-chip:focus .culture-popover {
+  display: grid;
+  gap: 6px;
+}
+
+.culture-popover strong,
+.culture-popover em,
+.culture-popover span,
+.culture-popover small {
+  display: block;
+  line-height: 1.45;
+}
+
+.culture-popover em,
+.culture-popover small {
+  color: var(--muted);
+  font-style: normal;
 }
 
 @media (max-width: 900px) {
@@ -328,6 +423,7 @@ audio {
   .workbench,
   .audio-row,
   .details,
+  .metrics,
   .summary-strip,
   .control-grid {
     grid-template-columns: 1fr;

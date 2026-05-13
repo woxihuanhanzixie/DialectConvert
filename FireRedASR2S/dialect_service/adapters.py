@@ -165,7 +165,17 @@ def rewrite_text(
         target_dialect=target_dialect,
         dialect_style=dialect_style,
     )
-    cultural_cards = match_cultural_cards(semantic_text, target_dialect=target_dialect)
+    cultural_cards = _match_cultural_cards_from_layers(
+        target_dialect=target_dialect,
+        layers=[
+            text,
+            source_for_rewrite,
+            rewrite_input_text,
+            semantic_text,
+            pronunciation["pronunciation_text"],
+            prosody["prosody_text"],
+        ],
+    )
     return {
         "source_text": text,
         "tn_text": rewrite_input_text,
@@ -196,6 +206,17 @@ def rewrite_text(
         "target_dialect": target_dialect,
         "dialect_style": dialect_style,
     }
+
+
+def _match_cultural_cards_from_layers(*, target_dialect: str, layers: list[str]) -> list[dict[str, Any]]:
+    cards_by_id: dict[str, dict[str, Any]] = {}
+    for layer in layers:
+        if not layer:
+            continue
+        for card in match_cultural_cards(str(layer), target_dialect=target_dialect):
+            key = str(card.get("id") or card.get("term") or len(cards_by_id))
+            cards_by_id.setdefault(key, card)
+    return list(cards_by_id.values())
 
 
 def tts_text(
