@@ -9,10 +9,8 @@ from typing import Any
 import soundfile as sf
 
 from asr_service.audio_io import make_temp_dir, normalize_file_to_wav
-from asr_service.asr_engine import get_asr_engine
 from asr_service.cloud_asr import transcribe_api_first
 from asr_service.config import AsrServiceConfig
-from asr_service.system_engine import get_asr_system_engine
 from fireredasr2s.dialect_pipeline.config import Step2Config
 from fireredasr2s.dialect_pipeline.dialects import build_teacher_style_instruction, dialect_label, normalize_dialect_style
 
@@ -683,6 +681,9 @@ class DialectPipelineEngine:
             return_timestamp=True,
         )
         if asr_result is None:
+            from asr_service.asr_engine import get_asr_engine
+            from asr_service.system_engine import get_asr_system_engine
+
             local_asr_path = Path(wav_path)
             if local_asr_path.suffix.lower() != ".wav":
                 local_asr_path, _ = normalize_file_to_wav(

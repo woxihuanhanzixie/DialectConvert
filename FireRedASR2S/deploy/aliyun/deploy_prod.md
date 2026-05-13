@@ -6,13 +6,13 @@
 - 反向代理：`Nginx`
 - 主后端：`dialect_service`
 - 主语音能力：`Qwen/DashScope API`
-- Voice Matched：`qwen-voice-enrollment -> qwen3-tts-vc-2026-01-22`
-- 本地模型：FireRed ASR、OpenVoice、RVC 只保留为后备/评测路线，不作为国内上线默认主链路
+- Voice Matched：首版公网稳定版默认关闭，页面清楚展示 Gold Teacher 回退
+- 本地模型：FireRed ASR、OpenVoice、RVC 只保留为后备/评测路线，不作为 2C2G 国内上线默认主链路
 
 ## 推荐机器
 
 - 阿里云 ECS Linux
-- 首版 API-first 可使用 CPU 机器，建议 2C4G 起步
+- 首版 API-first 可使用 CPU 机器，2C2G 可跑 Gold Teacher 稳定版，建议 2C4G 起步
 - 系统盘建议 >= 60GB
 - 如继续保留本地 ASR 模型和历史运行数据，数据盘建议 >= 100GB
 - 安全组开放：`80`、`443`，后端 `8002` 只监听 `127.0.0.1`，不要直接暴露公网
@@ -35,10 +35,10 @@
 
 ```bash
 cd /opt/Competition/FireRedASR2S
-pip install -r requirements.txt
+pip install -r deploy/aliyun/requirements-prod.txt
 ```
 
-如果暂时不启用本地 ASR/GPU，可后续再瘦身依赖；首版先保持兼容，避免大批量删除。
+公网 Gold Teacher 稳定版使用轻量依赖，不安装本地 FireRed ASR、OpenVoice、RVC 和 GPU 版 PyTorch。若后续要恢复本地模型评测，再单独安装完整 `requirements.txt` 并准备模型目录。
 
 ### 3. 配置环境变量
 
@@ -51,10 +51,11 @@ pip install -r requirements.txt
   - `QWEN_LLM_API_KEY`
   - `PUBLIC_APP_ORIGIN`
   - `CORS_ALLOW_ORIGINS`
-- 国内上线默认保留：
+- 国内上线默认保留 Gold Teacher 稳定版：
 
 ```bash
-VOICE_MATCH_PROVIDER=qwen_voice_clone
+VOICE_MATCH_PROVIDER=none
+VOICE_CONVERSION_PROVIDER=none
 VOICE_CLONE_PROVIDER=qwen_voice_clone
 TEXT_CLONE_PROVIDER=qwen_voice_clone
 QWEN_VOICE_ENROLLMENT_MODEL=qwen-voice-enrollment
@@ -63,6 +64,8 @@ QWEN_TTS_VC_MODEL=qwen3-tts-vc-2026-01-22
 SPEAKER_REF_AUDIO_MIN_S=10
 SPEAKER_REF_AUDIO_MAX_S=20
 ```
+
+不要把 `VOICE_MATCH_PROVIDER` 设置为 `qwen_voice_clone`。该路线是 `文本 + 参考音频 -> 克隆语音`，会重新决定发音和韵律；当前公网首版必须保持 `Gold Teacher` 作为推荐主输出。
 
 ### 4. 启动后端
 
@@ -79,8 +82,8 @@ sudo systemctl status dialect_service
 ### 5. 配置 Nginx
 
 - 拷贝 `deploy/aliyun/nginx_public.conf` 到 `/etc/nginx/conf.d/demo1.conf`
-- 根据实际域名修改 `server_name`
-- 域名备案并解析到 ECS 公网 IP；国内用户访问必须使用国内可达域名/IP，不要依赖 `gradio.live`
+- 临时公网 IP 交付时可使用 `server_name 43.139.53.84 _;`
+- 如后续绑定域名，再修改 `server_name`、`PUBLIC_APP_ORIGIN` 和 `CORS_ALLOW_ORIGINS`
 - 重载 Nginx：
 
 ```bash
@@ -95,12 +98,11 @@ sudo systemctl reload nginx
 
 ### 7. 验证
 
-- 打开 `https://your-domain` 或 `http://your-domain`
+- 打开 `http://43.139.53.84`，或后续绑定后的域名
 - 上传音频
-- 上传 10-20 秒单人声参考音频
 - 确认：
   - `Gold Teacher` 可播放
-  - `Voice Matched` 走 Qwen 声音复刻，可播放或明确回退
+  - `Voice Matched` 显示关闭或明确回退，不影响推荐主输出
   - 三种方言选择可生效
 
 ## 成本回退建议
@@ -108,9 +110,10 @@ sudo systemctl reload nginx
 - 若本地 ASR 依赖过重：
   - 优先把 ASR 切到云端 API
   - 保留本地 ASR 作为实验环境
-- 若 Qwen 声音复刻不可用：
-  - 暂时回退 Gold Teacher
-  - 再评估是否云端部署 OpenVoice/RVC
+- 若后续需要 Voice Matched：
+  - 优先评估更高内存机器或独立推理服务
+  - OpenVoice/RVC 必须保持 teacher-first audio-to-audio 语义
+  - Qwen 声音复刻只能作为独立对照路线，不应冒充 Voice Matched
 
 ## 后续优化
 
