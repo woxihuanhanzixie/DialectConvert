@@ -86,7 +86,11 @@ async function checkHealth() {
 function readJsonError(payload) {
   if (!payload) return "请求失败";
   if (typeof payload.detail === "string") return payload.detail;
+  if (payload.detail && typeof payload.detail === "object" && !Array.isArray(payload.detail)) {
+    return payload.detail.message || payload.detail.error || JSON.stringify(payload.detail);
+  }
   if (Array.isArray(payload.detail)) return payload.detail.map((item) => item.msg || JSON.stringify(item)).join("；");
+  if (typeof payload.message === "string") return payload.message;
   return "请求失败";
 }
 
@@ -179,7 +183,12 @@ function renderSession(session, mainAudio) {
   els.prosodyText.textContent = "CosyVoice v3-flash 实时合成，不等待 LLM 韵律层。";
   els.culturalCards.textContent = "-";
   updateStats({});
-  els.clonedNote.textContent = session.voice_cache_hit ? "已复用 CosyVoice 专属音色，正在实时播放。" : "CosyVoice v3-flash 正在实时播放。";
+  const warnings = Array.isArray(session.warnings) ? session.warnings : [];
+  if (warnings.some((item) => String(item).includes("voice_enrollment_fallback"))) {
+    els.clonedNote.textContent = "参考音频暂未复刻成功，已自动使用系统音色继续生成。";
+  } else {
+    els.clonedNote.textContent = session.voice_cache_hit ? "已复用 CosyVoice 专属音色，正在实时播放。" : "CosyVoice v3-flash 正在实时播放。";
+  }
   els.goldNote.textContent = "当前公网主链路不再使用 Gold Teacher。";
 }
 
@@ -191,10 +200,16 @@ function websocketUrl(url) {
 }
 
 async function playRealtime(session) {
-  if (!("MediaSource" in window) || !MediaSource.isTypeSupported("audio/mpeg")) {
-    throw new Error("当前浏览器不支持 MP3 流式播放。");
+  const mediaSourceCtor = window.MediaSource || window.WebKitMediaSource;
+  const supportsMseMp3 = Boolean(
+    mediaSourceCtor &&
+      typeof mediaSourceCtor.isTypeSupported === "function" &&
+      mediaSourceCtor.isTypeSupported("audio/mpeg")
+  );
+  if (!supportsMseMp3) {
+    return playRealtimeAsBlob(session);
   }
-  const mediaSource = new MediaSource();
+  const mediaSource = new mediaSourceCtor();
   const chunks = [];
   let sourceBuffer = null;
   let opened = false;
@@ -255,6 +270,50 @@ async function playRealtime(session) {
     ws.onclose = () => {
       finished = true;
       if (!sourceBuffer && chunks.length === 0) reject(new Error("实时连接关闭，未收到音频。"));
+    };
+  });
+}
+
+async function playRealtimeAsBlob(session) {
+  const chunks = [];
+  const startedAt = performance.now();
+  const streamUrl = websocketUrl(session.stream_url);
+  const ws = new WebSocket(streamUrl);
+  ws.binaryType = "arraybuffer";
+
+  await new Promise((resolve, reject) => {
+    ws.onopen = () => setStatus("手机浏览器不支持边下边播，正在接收音频...", "loading");
+    ws.onerror = () => reject(new Error("实时 WebSocket 连接失败。"));
+    ws.onmessage = (event) => {
+      if (typeof event.data === "string") {
+        let payload = {};
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          payload = { type: "message", message: event.data };
+        }
+        if (payload.type === "error") {
+          reject(new Error(payload.message || "实时合成失败。"));
+          return;
+        }
+        if (payload.type === "done") {
+          const blob = new Blob(chunks, { type: "audio/mpeg" });
+          const objectUrl = URL.createObjectURL(blob);
+          els.clonedAudio.src = objectUrl;
+          els.clonedDownload.href = objectUrl;
+          els.clonedDownload.classList.remove("hidden");
+          els.clonedAudio.play().catch(() => {});
+          els.totalLatency.textContent = `${Math.round(performance.now() - startedAt)} ms`;
+          setStatus("音频已生成，手机端可直接播放。", "success");
+          resolve();
+        }
+        return;
+      }
+      chunks.push(event.data);
+      setStatus("正在接收 CosyVoice 方言语音...", "loading");
+    };
+    ws.onclose = () => {
+      if (chunks.length === 0) reject(new Error("实时连接关闭，未收到音频。"));
     };
   });
 }

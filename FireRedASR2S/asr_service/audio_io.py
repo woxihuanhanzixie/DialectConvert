@@ -17,7 +17,25 @@ from .audio_quality import validate_audio_for_mode
 
 TARGET_SR = 16000
 TARGET_CHANNELS = 1
-SUPPORTED_EXTS = {".wav", ".mp3", ".m4a", ".webm", ".flac", ".aac", ".amr", ".3gp", ".ogg", ".opus"}
+SUPPORTED_EXTS = {".wav", ".mp3", ".m4a", ".mp4", ".webm", ".flac", ".aac", ".amr", ".3gp", ".ogg", ".opus"}
+CONTENT_TYPE_EXTS = {
+    "audio/wav": ".wav",
+    "audio/wave": ".wav",
+    "audio/x-wav": ".wav",
+    "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
+    "audio/mp4": ".m4a",
+    "audio/x-m4a": ".m4a",
+    "video/mp4": ".mp4",
+    "audio/aac": ".aac",
+    "audio/amr": ".amr",
+    "audio/3gpp": ".3gp",
+    "audio/ogg": ".ogg",
+    "audio/opus": ".opus",
+    "audio/webm": ".webm",
+    "video/webm": ".webm",
+    "audio/flac": ".flac",
+}
 
 
 def find_ffmpeg() -> str:
@@ -75,7 +93,7 @@ async def normalize_upload_to_wav(
     *,
     frontend_mode: str = "light_asr_safe",
 ) -> tuple[Path, dict[str, Any]]:
-    suffix = Path(upload.filename or "upload.wav").suffix.lower()
+    suffix = _upload_suffix(upload)
     if suffix not in SUPPORTED_EXTS:
         raise AudioNormalizeError(
             f"Unsupported audio format: {suffix or 'unknown'}",
@@ -92,6 +110,17 @@ async def normalize_upload_to_wav(
                 break
             f.write(chunk)
     return normalize_file_to_wav(raw_path, work_dir, frontend_mode=frontend_mode)
+
+
+def _upload_suffix(upload: UploadFile) -> str:
+    filename_suffix = Path(upload.filename or "").suffix.lower()
+    if filename_suffix in SUPPORTED_EXTS:
+        return filename_suffix
+    content_type = (upload.content_type or "").split(";", 1)[0].strip().lower()
+    inferred = CONTENT_TYPE_EXTS.get(content_type, "")
+    if inferred:
+        return inferred
+    return filename_suffix or ".wav"
 
 
 def normalize_file_to_wav(
