@@ -44,6 +44,9 @@ class DialectPipelineEngine:
             "cosyvoice_target_model": self.cfg.cosyvoice_target_model,
             "cosyvoice_system_voice": self.cfg.cosyvoice_system_voice,
             "cosyvoice_ws_url": self.cfg.cosyvoice_ws_url,
+            "cosyvoice_default_ref_audio": str(self.cfg.cosyvoice_default_ref_audio),
+            "cosyvoice_text_only_use_default_voice": self.cfg.cosyvoice_text_only_use_default_voice,
+            "cosyvoice_text_only_rewrite": self.cfg.cosyvoice_text_only_rewrite,
             "output_dir": str(self.cfg.output_dir),
         }
 
@@ -700,9 +703,11 @@ class DialectPipelineEngine:
         speaker_ref_audio: str = "",
         speaker_ref_audio_url: str = "",
         target_dialect: str,
+        text_rewrite_mode: str = "local_clean",
     ) -> dict[str, Any]:
         text = clean_realtime_speech_text(speech_text)
         voice_id = self.cfg.cosyvoice_system_voice
+        voice_source = "system_fallback"
         voice_cache_hit = False
         reference_validation: dict[str, Any] = {}
         error = ""
@@ -715,33 +720,23 @@ class DialectPipelineEngine:
                     prefix=f"demo{uuid.uuid4().hex[:6]}",
                 )
                 voice_id = str(voice_info.get("voice_id") or voice_info.get("voice") or voice_id)
+                voice_source = "default_ref" if Path(speaker_ref_audio).name.startswith("default_") else "uploaded_ref"
                 voice_cache_hit = bool(voice_info.get("cache_hit"))
                 reference_validation = voice_info.get("reference_audio_validation", {})
             except Exception as exc:  # noqa: BLE001
                 error = str(exc)
 
         out_audio = self._build_audio_path(f"{trace_stem}_cosyvoice_fallback", self.cfg.cosyvoice_audio_format)
+        result = synthesize_cosyvoice_http(
+            text,
+            out_audio,
+            self.cfg,
+            voice=voice_id,
+            target_dialect=target_dialect,
+        )
         if error:
-            result = {
-                "wav_path": "",
-                "audio_url": "",
-                "expires_at": "",
-                "voice": voice_id,
-                "voice_id": voice_id,
-                "model": self.cfg.cosyvoice_target_model,
-                "provider": "cosyvoice",
-                "error": error,
-                "fallback_reason": "cosyvoice_voice_enrollment_failed",
-                "latency_ms": 0.0,
-            }
-        else:
-            result = synthesize_cosyvoice_http(
-                text,
-                out_audio,
-                self.cfg,
-                voice=voice_id,
-                target_dialect=target_dialect,
-            )
+            result["fallback_reason"] = "cosyvoice_voice_enrollment_failed"
+            result["enrollment_error"] = error
 
         route = self._build_route_payload(
             "cosyvoice_fallback",
@@ -754,6 +749,8 @@ class DialectPipelineEngine:
                 "instruction_mode_active": True,
                 "voice_cache_hit": voice_cache_hit,
                 "reference_audio_validation": reference_validation,
+                "voice_source": voice_source,
+                "text_rewrite_mode": text_rewrite_mode,
             },
             input_text=text,
             input_mode="review_text_low_latency",
@@ -769,6 +766,8 @@ class DialectPipelineEngine:
         route["route_role"] = "cosyvoice_dialect_synthesis"
         route["reference_audio_validation"] = reference_validation
         route["voice_cache_hit"] = voice_cache_hit
+        route["voice_source"] = voice_source
+        route["text_rewrite_mode"] = text_rewrite_mode
         gap_summary = {
             "content_diff": "公网主输出由 CosyVoice v3-flash 直接合成，不等待 LLM 方言文本改写。",
             "pronunciation_diff": "方言发音由 CosyVoice v3-flash 的目标方言能力和 instruction 控制。",
@@ -803,6 +802,8 @@ class DialectPipelineEngine:
             "speaker_similarity_note": route["speaker_similarity_note"],
             "clone_mode": route["clone_mode"],
             "fallback_reason": route["fallback_reason"],
+            "voice_source": voice_source,
+            "text_rewrite_mode": text_rewrite_mode,
             "speaker_similarity_priority": self.cfg.speaker_similarity_priority,
             "tts_fluency_mode": "realtime_first",
             "tts_style_instructions": route["tts_style_instructions"],
@@ -826,6 +827,10 @@ class DialectPipelineEngine:
             "timbre_ref_audio": str(speaker_ref_audio) if speaker_ref_audio else "",
             "prosody_ref_audio": "",
             "prosody_guidance_mode": "cosyvoice_instruction",
+            "voice_source": voice_source,
+            "voice_cache_hit": voice_cache_hit,
+            "text_rewrite_mode": text_rewrite_mode,
+            "reference_audio_validation": reference_validation,
         }
 
     def process_text(
@@ -852,6 +857,30 @@ class DialectPipelineEngine:
         self.cfg.default_dialect_style = active_dialect_style
         if enable_tts and (self.cfg.voice_conversion_provider or "").strip().lower() == "cosyvoice":
             speech_text = clean_realtime_speech_text(text)
+            text_rewrite_mode = "local_clean"
+            rewrite_error = ""
+            rewrite = None
+            if enable_rewrite and self.cfg.cosyvoice_text_only_rewrite:
+                try:
+                    rewrite = rewrite_text(
+                        speech_text,
+                        self.cfg,
+                        segment_max_len=segment_max_len,
+                        input_lang=input_lang,
+                        pivot_text_zh="",
+                        target_dialect=active_target_dialect,
+                        dialect_style=active_dialect_style,
+                    )
+                    speech_text = clean_realtime_speech_text(
+                        rewrite.get("prosody_text")
+                        or rewrite.get("pronunciation_text")
+                        or rewrite.get("dialect_text")
+                        or rewrite.get("semantic_text")
+                        or speech_text
+                    )
+                    text_rewrite_mode = "llm"
+                except Exception as exc:  # noqa: BLE001
+                    rewrite_error = str(exc)
             review = {
                 "asr_raw_text": text,
                 "asr_reviewed_text": speech_text,
@@ -861,42 +890,44 @@ class DialectPipelineEngine:
                 "review_latency_ms": round((perf_counter() - t0) * 1000, 2),
                 "input_lang": input_lang,
             }
-            rewrite = {
-                "source_text": text,
-                "tn_text": speech_text,
-                "rewrite_segments": [speech_text] if speech_text else [],
-                "dialect_text": speech_text,
-                "semantic_text": speech_text,
-                "pronunciation_text": "",
-                "prosody_text": "",
-                "pronunciation_mode": "cosyvoice_native",
-                "pronunciation_rule_hits": [],
-                "pronunciation_hit_categories": [],
-                "pronunciation_fallback_used": False,
-                "pronunciation_notes": "CosyVoice v3-flash handles target dialect pronunciation.",
-                "prosody_mode": "cosyvoice_native",
-                "prosody_rule_hits": [],
-                "prosody_hit_categories": [],
-                "prosody_fallback_used": False,
-                "prosody_notes": "Low-latency path does not wait for LLM prosody.",
-                "cultural_cards": [],
-                "cultural_card_terms": [],
-                "degrade_mode": False,
-                "llm_model": "not_used_low_latency",
-                "llm_latency_ms": 0.0,
-                "llm_error": "",
-                "input_lang": input_lang,
-                "pivot_text_zh": "",
-                "translation_notes": "",
-                "target_dialect": active_target_dialect,
-                "dialect_style": active_dialect_style,
-            }
+            if rewrite is None:
+                rewrite = {
+                    "source_text": text,
+                    "tn_text": speech_text,
+                    "rewrite_segments": [speech_text] if speech_text else [],
+                    "dialect_text": speech_text,
+                    "semantic_text": speech_text,
+                    "pronunciation_text": "",
+                    "prosody_text": "",
+                    "pronunciation_mode": "cosyvoice_native",
+                    "pronunciation_rule_hits": [],
+                    "pronunciation_hit_categories": [],
+                    "pronunciation_fallback_used": False,
+                    "pronunciation_notes": "CosyVoice v3-flash handles target dialect pronunciation.",
+                    "prosody_mode": "cosyvoice_native",
+                    "prosody_rule_hits": [],
+                    "prosody_hit_categories": [],
+                    "prosody_fallback_used": False,
+                    "prosody_notes": "Low-latency path does not wait for LLM prosody.",
+                    "cultural_cards": [],
+                    "cultural_card_terms": [],
+                    "degrade_mode": bool(rewrite_error),
+                    "llm_model": "not_used_low_latency",
+                    "llm_latency_ms": 0.0,
+                    "llm_error": rewrite_error,
+                    "input_lang": input_lang,
+                    "pivot_text_zh": "",
+                    "translation_notes": "",
+                    "target_dialect": active_target_dialect,
+                    "dialect_style": active_dialect_style,
+                }
             tts = self._build_cosyvoice_tts(
                 trace_stem=trace_id,
                 speech_text=speech_text,
                 speaker_ref_audio=speaker_ref_audio if voice_clone_enabled else "",
                 speaker_ref_audio_url=speaker_ref_audio_url,
                 target_dialect=active_target_dialect,
+                text_rewrite_mode=text_rewrite_mode,
             )
             return {
                 "source_audio": None,
@@ -1215,6 +1246,7 @@ class DialectPipelineEngine:
                 speaker_ref_audio=speaker_ref_audio if voice_clone_enabled else "",
                 speaker_ref_audio_url=speaker_ref_audio_url,
                 target_dialect=active_target_dialect,
+                text_rewrite_mode="local_clean",
             )
             return {
                 "source_audio": {"path": str(Path(wav_path).resolve())},

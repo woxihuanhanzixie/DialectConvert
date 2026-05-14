@@ -94,6 +94,11 @@ class TtsRouteResponse(BaseModel):
     tts_fluency_mode: str = "allow_rate_adjust"
     tts_style_instructions: str = ""
     instruction_mode_active: bool = False
+    voice_id: str = ""
+    voice_source: str = ""
+    voice_cache_hit: bool = False
+    text_rewrite_mode: str = ""
+    reference_audio_validation: dict[str, Any] | None = None
 
 
 class GapSummaryResponse(BaseModel):
@@ -158,6 +163,10 @@ class TtsResponse(BaseModel):
     timbre_ref_audio: str = ""
     prosody_ref_audio: str = ""
     prosody_guidance_mode: str = ""
+    voice_source: str = ""
+    voice_cache_hit: bool = False
+    text_rewrite_mode: str = ""
+    reference_audio_validation: dict[str, Any] | None = None
 
 
 class PipelineResponse(BaseModel):

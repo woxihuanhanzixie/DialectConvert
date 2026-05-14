@@ -72,6 +72,9 @@ class Step2Config:
     cosyvoice_sample_rate: int
     cosyvoice_voice_cache_dir: Path
     cosyvoice_ref_audio_dir: Path
+    cosyvoice_default_ref_audio: Path
+    cosyvoice_text_only_use_default_voice: bool
+    cosyvoice_text_only_rewrite: bool
     speaker_ref_audio_min_s: float
     speaker_ref_audio_max_s: float
     speaker_ref_keep_raw: bool
@@ -147,6 +150,14 @@ class Step2Config:
             cosyvoice_ref_audio_dir=Path(
                 os.getenv("COSYVOICE_REF_AUDIO_DIR", str(root / "runtime_data" / "step2_output" / "ref_audio"))
             ),
+            cosyvoice_default_ref_audio=Path(
+                os.getenv(
+                    "COSYVOICE_DEFAULT_REF_AUDIO",
+                    str(root / "assets" / "default_cosyvoice_reference.mp3"),
+                )
+            ),
+            cosyvoice_text_only_use_default_voice=os.getenv("COSYVOICE_TEXT_ONLY_USE_DEFAULT_VOICE", "1") == "1",
+            cosyvoice_text_only_rewrite=os.getenv("COSYVOICE_TEXT_ONLY_REWRITE", "1") == "1",
             speaker_ref_audio_min_s=float(os.getenv("SPEAKER_REF_AUDIO_MIN_S", "10")),
             speaker_ref_audio_max_s=float(os.getenv("SPEAKER_REF_AUDIO_MAX_S", "20")),
             speaker_ref_keep_raw=os.getenv("SPEAKER_REF_KEEP_RAW", "1") == "1",

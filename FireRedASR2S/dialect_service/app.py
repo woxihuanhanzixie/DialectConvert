@@ -18,6 +18,7 @@ from asr_service.config import AsrServiceConfig
 from fireredasr2s.dialect_pipeline.cosyvoice import clean_realtime_speech_text, cosyvoice_instruction, create_cosyvoice_voice, stream_cosyvoice_websocket
 from fireredasr2s.dialect_pipeline.dialects import is_supported_dialect, normalize_dialect_style, supported_dialect_codes
 
+from .adapters import rewrite_text
 from .pipeline_engine import get_pipeline_engine
 from .schemas import (
     HealthResponse,
@@ -126,6 +127,57 @@ def _copy_reference_audio_to_public_dir(ref_audio_path: str, trace_id: str) -> s
     if src.resolve() != dst.resolve():
         shutil.copyfile(src, dst)
     return str(dst)
+
+
+def _copy_default_reference_audio_to_public_dir(trace_id: str) -> str:
+    engine = get_pipeline_engine()
+    src = engine.cfg.cosyvoice_default_ref_audio
+    if not src.exists() or not src.is_file():
+        raise RuntimeError(f"Default CosyVoice reference audio not found: {src}")
+    suffix = src.suffix.lower() or ".mp3"
+    engine.cfg.cosyvoice_ref_audio_dir.mkdir(parents=True, exist_ok=True)
+    dst = engine.cfg.cosyvoice_ref_audio_dir / f"default_{trace_id}{suffix}"
+    if src.resolve() != dst.resolve():
+        shutil.copyfile(src, dst)
+    return str(dst)
+
+
+def _should_use_default_voice(file: UploadFile | None, speaker_ref_audio: UploadFile | None, text: str) -> bool:
+    engine = get_pipeline_engine()
+    if not engine.cfg.cosyvoice_text_only_use_default_voice:
+        return False
+    if speaker_ref_audio is not None:
+        return False
+    return bool((text or "").strip() or file is not None)
+
+
+def _rewrite_realtime_text_if_enabled(text: str, target_dialect: str, dialect_style: str) -> tuple[str, str, str]:
+    engine = get_pipeline_engine()
+    cleaned = clean_realtime_speech_text(text)
+    if not cleaned:
+        return cleaned, "none", ""
+    if not engine.cfg.cosyvoice_text_only_rewrite:
+        return cleaned, "local_clean", ""
+    try:
+        rewrite = rewrite_text(
+            cleaned,
+            engine.cfg,
+            segment_max_len=28,
+            input_lang="zh",
+            pivot_text_zh="",
+            target_dialect=target_dialect,
+            dialect_style=dialect_style,
+        )
+        rewritten = clean_realtime_speech_text(
+            rewrite.get("prosody_text")
+            or rewrite.get("pronunciation_text")
+            or rewrite.get("dialect_text")
+            or rewrite.get("semantic_text")
+            or cleaned
+        )
+        return rewritten or cleaned, "llm", ""
+    except Exception as exc:  # noqa: BLE001
+        return cleaned, "local_clean", f"text_rewrite_fallback: {exc}"
 
 
 def _audio_media_type(path: Path) -> str:
@@ -249,6 +301,7 @@ async def realtime_session(
     source_audio: dict[str, Any] | None = None
     asr_payload: dict[str, Any] | None = None
     warnings: list[str] = []
+    text_rewrite_mode = "none"
     try:
         speech_text = clean_realtime_speech_text(text)
         if file is not None and not speech_text:
@@ -273,10 +326,15 @@ async def realtime_session(
             speech_text = clean_realtime_speech_text(asr_result.get("punc_text") or asr_result.get("text") or "")
         if not speech_text:
             raise HTTPException(status_code=400, detail="Either text or an audio file with recognizable speech is required.")
+        if file is None and text.strip():
+            speech_text, text_rewrite_mode, rewrite_warning = _rewrite_realtime_text_if_enabled(speech_text, target_dialect, dialect_style)
+            if rewrite_warning:
+                warnings.append(rewrite_warning)
 
         ref_audio_path = ""
         ref_public_url = ""
         voice_id = engine.cfg.cosyvoice_system_voice
+        voice_source = "system_fallback"
         voice_cache_hit = False
         reference_audio_validation: dict[str, Any] = {}
         if speaker_ref_audio is not None and voice_clone_enabled:
@@ -293,6 +351,7 @@ async def realtime_session(
                     prefix="demo",
                 )
                 voice_id = str(voice_info.get("voice_id") or voice_info.get("voice") or voice_id)
+                voice_source = "uploaded_ref"
                 voice_cache_hit = bool(voice_info.get("cache_hit"))
                 reference_audio_validation = voice_info.get("reference_audio_validation", {})
                 reference_audio_validation.setdefault("frontend_mode", ref_meta.get("frontend_mode", ""))
@@ -303,6 +362,29 @@ async def realtime_session(
                     "error": str(exc),
                 }
                 warnings.append(f"voice_enrollment_fallback: {exc}")
+        elif _should_use_default_voice(file, speaker_ref_audio, text):
+            try:
+                ref_audio_path = _copy_default_reference_audio_to_public_dir(trace_id)
+                ref_public_url = _public_audio_url(request, ref_audio_path)
+                voice_info = await asyncio.to_thread(
+                    create_cosyvoice_voice,
+                    ref_audio_path,
+                    ref_public_url,
+                    engine.cfg,
+                    prefix="demo",
+                )
+                voice_id = str(voice_info.get("voice_id") or voice_info.get("voice") or voice_id)
+                voice_source = "default_ref"
+                voice_cache_hit = bool(voice_info.get("cache_hit"))
+                reference_audio_validation = voice_info.get("reference_audio_validation", {})
+                reference_audio_validation["source"] = "default_ref"
+            except Exception as exc:  # noqa: BLE001
+                reference_audio_validation = {
+                    "source": "default_ref",
+                    "fallback_voice": engine.cfg.cosyvoice_system_voice,
+                    "error": str(exc),
+                }
+                warnings.append(f"default_voice_fallback: {exc}")
 
         stream_id = str(uuid.uuid4())
         stream_url = str(request.url_for("cosyvoice_stream", stream_id=stream_id))
@@ -316,8 +398,10 @@ async def realtime_session(
             "target_dialect": target_dialect,
             "dialect_style": dialect_style,
             "voice_id": voice_id,
+            "voice_source": voice_source,
             "voice_cache_hit": voice_cache_hit,
             "reference_audio_validation": reference_audio_validation,
+            "text_rewrite_mode": text_rewrite_mode,
             "created_at": asyncio.get_running_loop().time(),
         }
         return {
@@ -327,6 +411,7 @@ async def realtime_session(
             "target_dialect": target_dialect,
             "dialect_style": dialect_style,
             "voice_id": voice_id,
+            "voice_source": voice_source,
             "voice_cache_hit": voice_cache_hit,
             "stream_url": stream_url,
             "model": engine.cfg.cosyvoice_target_model,
@@ -335,6 +420,7 @@ async def realtime_session(
             "source_audio": source_audio,
             "asr": asr_payload,
             "reference_audio_validation": reference_audio_validation,
+            "text_rewrite_mode": text_rewrite_mode,
             "warnings": warnings,
         }
     except AudioNormalizeError as exc:
@@ -371,6 +457,7 @@ async def cosyvoice_stream(websocket: WebSocket, stream_id: str) -> None:
                     "trace_id": session["trace_id"],
                     "model": engine.cfg.cosyvoice_target_model,
                     "voice_id": session["voice_id"],
+                    "voice_source": session.get("voice_source", "system_fallback"),
                     "target_dialect": session["target_dialect"],
                     "format": engine.cfg.cosyvoice_audio_format,
                     "sample_rate": engine.cfg.cosyvoice_sample_rate,
@@ -462,6 +549,14 @@ async def pipeline(
                     "frontend_mode": ref_meta.get("frontend_mode", ""),
                     "audio_frontend": ref_meta.get("audio_frontend", {}),
                 }
+            if not ref_audio_path and engine.cfg.voice_conversion_provider == "cosyvoice" and engine.cfg.cosyvoice_text_only_use_default_voice:
+                ref_audio_path = _copy_default_reference_audio_to_public_dir(uuid.uuid4().hex)
+                ref_audio_url = _public_audio_url(request, ref_audio_path)
+                meta["voice_clone_ref_audio"] = {
+                    "source": "default_ref",
+                    "path": str(ref_audio_path),
+                    "audio_frontend": {},
+                }
             result = engine.process_audio(
                 wav_path,
                 enable_punc=enable_punc,
@@ -469,7 +564,7 @@ async def pipeline(
                 enable_tts=enable_tts,
                 segment_max_len=segment_max_len,
                 voice=voice,
-                voice_clone_enabled=voice_clone_enabled,
+                voice_clone_enabled=voice_clone_enabled or bool(ref_audio_path),
                 speaker_ref_audio=ref_audio_path,
                 speaker_ref_audio_url=ref_audio_url,
                 target_dialect=target_dialect,
@@ -479,6 +574,9 @@ async def pipeline(
             result = _attach_public_audio_urls(result, request)
             return PipelineResponse(**result)
         if text.strip():
+            if not ref_audio_path and engine.cfg.voice_conversion_provider == "cosyvoice" and engine.cfg.cosyvoice_text_only_use_default_voice:
+                ref_audio_path = _copy_default_reference_audio_to_public_dir(uuid.uuid4().hex)
+                ref_audio_url = _public_audio_url(request, ref_audio_path)
             result = engine.process_text(
                 text,
                 enable_rewrite=enable_rewrite,
@@ -486,7 +584,7 @@ async def pipeline(
                 segment_max_len=segment_max_len,
                 voice=voice,
                 input_lang=input_lang,
-                voice_clone_enabled=voice_clone_enabled,
+                voice_clone_enabled=voice_clone_enabled or bool(ref_audio_path),
                 speaker_ref_audio=ref_audio_path,
                 speaker_ref_audio_url=ref_audio_url,
                 target_dialect=target_dialect,

@@ -184,7 +184,11 @@ function renderSession(session, mainAudio) {
   els.culturalCards.textContent = "-";
   updateStats({});
   const warnings = Array.isArray(session.warnings) ? session.warnings : [];
-  if (warnings.some((item) => String(item).includes("voice_enrollment_fallback"))) {
+  if (session.voice_source === "default_ref") {
+    els.clonedNote.textContent = session.voice_cache_hit ? "已复用默认 CosyVoice 方言音色，正在实时播放。" : "已创建默认 CosyVoice 方言音色，正在实时播放。";
+  } else if (session.voice_source === "system_fallback") {
+    els.clonedNote.textContent = "默认方言音色不可用，已使用系统音色兜底，口音可能偏普通话。";
+  } else if (warnings.some((item) => String(item).includes("voice_enrollment_fallback"))) {
     els.clonedNote.textContent = "参考音频暂未复刻成功，已自动使用系统音色继续生成。";
   } else {
     els.clonedNote.textContent = session.voice_cache_hit ? "已复用 CosyVoice 专属音色，正在实时播放。" : "CosyVoice v3-flash 正在实时播放。";

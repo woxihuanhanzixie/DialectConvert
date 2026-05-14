@@ -289,7 +289,6 @@ def _post_json(url: str, payload: dict[str, Any], api_key: str, timeout_s: int) 
 def _audio_cache_key(ref_audio_path: str | Path, public_ref_url: str, cfg: Step2Config) -> str:
     h = hashlib.sha256()
     h.update(Path(ref_audio_path).read_bytes())
-    h.update(public_ref_url.encode("utf-8"))
     h.update(cfg.cosyvoice_target_model.encode("utf-8"))
     h.update(cfg.cosyvoice_base_url.encode("utf-8"))
     return h.hexdigest()
