@@ -383,5 +383,59 @@ async function submitPipeline(event) {
   }
 }
 
+function initRecording() {
+  const recordBtn = document.getElementById("record-btn");
+  const recordBtnText = document.getElementById("record-btn-text");
+  if (!recordBtn || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    if (recordBtn) recordBtn.disabled = true;
+    return;
+  }
+
+  let mediaRecorder = null;
+  let chunks = [];
+  let stream = null;
+
+  function setRecordingState(isRecording) {
+    recordBtn.classList.toggle("recording", isRecording);
+    if (recordBtnText) recordBtnText.textContent = isRecording ? "停止" : "录制";
+  }
+
+  recordBtn.addEventListener("click", async () => {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      return;
+    }
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunks = [];
+      const preferredType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
+      mediaRecorder = new MediaRecorder(stream, { mimeType: preferredType });
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      mediaRecorder.onstop = () => {
+        stream?.getTracks().forEach((track) => track.stop());
+        setRecordingState(false);
+        if (!chunks.length) return;
+        const blob = new Blob(chunks, { type: preferredType });
+        const file = new File([blob], "recording.webm", { type: preferredType });
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        els.inputAudio.files = transfer.files;
+        setStatus("已录制音频，可提交转换。", "success");
+      };
+      mediaRecorder.start();
+      setRecordingState(true);
+      setStatus("录音中...", "loading");
+    } catch {
+      stream?.getTracks().forEach((track) => track.stop());
+      setRecordingState(false);
+      setStatus("无法访问麦克风，请检查权限。", "error");
+    }
+  });
+}
+
+initRecording();
 els.form.addEventListener("submit", submitPipeline);
 checkHealth();
