@@ -208,7 +208,7 @@ LLM 调用规范（补全“怎么调用、需要什么”）：
 
 1. 你必须提供的配置（最小集合）
 
-- `DEEPSEEK_API_KEY`：sk-be0128e5ff754d44a10625506e6ec9a8
+- `DEEPSEEK_API_KEY`：已脱敏，请从本地 `.env` 或系统环境变量读取，不要写入文档。
 - `DEEPSEEK_BASE_URL`：默认 `https://api.deepseek.com/v1/chat/completions`，可覆盖。
 - `DEEPSEEK_MODEL`：默认 `deepseek-chat`，后续可切换。
 - Qwen 改写通道（预留）：
@@ -345,4 +345,3 @@ P2（留扩展位）：
    - 改写偏义
    - TTS 播放异常
 5. 生成 `report.md`，沉淀下一轮优化清单（为接口化/网页化/音色克隆做准备）。
-
