@@ -16,15 +16,18 @@ from .storage import (
 
 DIALECT_TTS_CONTROLS = {
     "cantonese": {
-        "instruction": "请用广东话表达。",
+        # CosyVoice dialect control is documented as a fixed English
+        # instruction. Free-form Chinese instructions are much less stable and
+        # can be ignored by cloned voices.
+        "instruction": "Speak in Cantonese.",
         "language_hint": "zh",
     },
     "sichuanese": {
-        "instruction": "请用四川话表达。",
+        "instruction": "Speak in Sichuan Mandarin.",
         "language_hint": "zh",
     },
     "hokkien": {
-        "instruction": "请用闽南话表达。",
+        "instruction": "Speak in Minnan.",
         "language_hint": "zh",
     },
 }
@@ -38,10 +41,9 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
     rewritten = rewrite_to_dialect(source_text, dialect)
     dialect_text = rewritten["dialect_text"]
     tts_control = DIALECT_TTS_CONTROLS[dialect]
-    # CosyVoice dialect pronunciation is controlled by instruction. The
-    # rewritten text is still displayed to the user, but synthesis uses the
-    # semantic source text plus dialect instruction to avoid Mandarin reading
-    # of Cantonese/Sichuanese/Hokkien characters.
+    # Use semantic Mandarin text plus the dialect instruction so CosyVoice
+    # chooses dialect phonology instead of reading dialect characters as
+    # Mandarin. The rewritten dialect text remains visible for explanation.
     synthesis_text = source_text
 
     gold_audio_url = None
@@ -58,7 +60,7 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
             language_hint=tts_control["language_hint"],
         )
     except ProviderError as exc:
-        warnings.append(f"Gold Teacher 合成失败：{exc}")
+        warnings.append(f"Gold Teacher synthesis failed: {exc}")
 
     try:
         cache_key = voice_cache_key(audio_path, settings.qwen_voice_target_model)
@@ -83,7 +85,7 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
             language_hint=tts_control["language_hint"],
         )
     except ProviderError as exc:
-        warnings.append(f"Voice Matched 克隆音色合成失败，已保留 Gold Teacher：{exc}")
+        warnings.append(f"Voice Matched cloned synthesis failed; kept Gold Teacher: {exc}")
 
     recommended = voice_matched_audio_url or gold_audio_url
     status = "ok" if recommended else "failed"
