@@ -41,10 +41,11 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
     rewritten = rewrite_to_dialect(source_text, dialect)
     dialect_text = rewritten["dialect_text"]
     tts_control = DIALECT_TTS_CONTROLS[dialect]
-    # Use semantic Mandarin text plus the dialect instruction so CosyVoice
-    # chooses dialect phonology instead of reading dialect characters as
-    # Mandarin. The rewritten dialect text remains visible for explanation.
-    synthesis_text = source_text
+    # Bind both content and pronunciation: the rewritten text carries dialect
+    # wording, and the official CosyVoice instruction carries dialect phonology.
+    # This avoids the old failure mode where dialect text was read with
+    # Mandarin pronunciation, or Mandarin text was only weakly re-expressed.
+    synthesis_text = dialect_text
 
     gold_audio_url = None
     voice_matched_audio_url = None
