@@ -1,6 +1,7 @@
-from pathlib import Path
+from types import SimpleNamespace
 
 from app.storage import safe_ext
+import app.storage as storage
 
 
 def test_safe_ext_keeps_common_audio_suffixes():
@@ -16,3 +17,46 @@ def test_safe_ext_falls_back_from_content_type():
 def test_safe_ext_rejects_unknown_suffix_to_wav():
     assert safe_ext("bad.exe", "application/octet-stream") == ".wav"
 
+
+def test_new_job_id_is_sortable_and_non_sensitive():
+    job_id = storage.new_job_id()
+
+    assert job_id.startswith("dc_")
+    assert len(job_id.split("_")) == 3
+    assert "audio" not in job_id.lower()
+
+
+def test_cleanup_runtime_removes_old_media_and_job_metadata(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        storage,
+        "settings",
+        SimpleNamespace(
+            upload_dir=tmp_path / "uploads",
+            output_dir=tmp_path / "outputs",
+            metadata_dir=tmp_path / "jobs",
+            cache_dir=tmp_path / "voice_cache",
+            cleanup_after_hours=1,
+            voice_cache_ttl_hours=1,
+        ),
+    )
+    storage.ensure_dirs()
+
+    old_paths = [
+        storage.settings.upload_dir / "dc_old.wav",
+        storage.settings.output_dir / "dc_old_gold.mp3",
+        storage.settings.metadata_dir / "dc_old.json",
+        storage.settings.cache_dir / "voice.json",
+    ]
+    for path in old_paths:
+        path.write_text("old", encoding="utf-8")
+        old_time = 1
+        path.touch()
+        path.chmod(0o666)
+        import os
+
+        os.utime(path, (old_time, old_time))
+
+    removed = storage.cleanup_runtime()
+
+    assert removed == len(old_paths)
+    assert all(not path.exists() for path in old_paths)

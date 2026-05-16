@@ -75,9 +75,11 @@ class Settings:
     data_dir: Path = ROOT_DIR / "runtime_data"
     upload_dir: Path = data_dir / "uploads"
     output_dir: Path = data_dir / "outputs"
+    metadata_dir: Path = data_dir / "jobs"
     cache_dir: Path = _runtime_path_env("QWEN_VOICE_CACHE_DIR", data_dir / "voice_cache")
     max_upload_mb: int = _int_env("MAX_UPLOAD_MB", 30)
     cleanup_after_hours: int = _int_env("CLEANUP_AFTER_HOURS", 24)
+    voice_cache_ttl_hours: int = _int_env("VOICE_CACHE_TTL_HOURS", 720)
     request_timeout_s: int = _int_env("API_REQUEST_TIMEOUT_S", 90)
     max_retries: int = _int_env("API_MAX_RETRIES", 3)
 

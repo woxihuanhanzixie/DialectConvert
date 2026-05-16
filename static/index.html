@@ -2,56 +2,120 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>声临其境</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d1117" />
+    <title>声临其境 | AI 方言音色复刻</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="hero">
-        <div>
-          <p class="eyebrow">AI 方言音色复刻</p>
-          <h1>声临其境</h1>
-          <p class="lead">录一段你的声音，生成同一音色说出的粤语、四川话或闽南话。</p>
-        </div>
-        <div class="theme-card">
-          <strong>语言多样性保护</strong>
-          <span>让乡音从档案里走出来，进入年轻人的日常表达。</span>
-        </div>
+    <main class="app-shell">
+      <section class="stage" aria-labelledby="appTitle">
+        <header class="topbar">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">▮</span>
+            <div>
+              <p class="eyebrow">AI 方言音色复刻</p>
+              <h1 id="appTitle">声临其境</h1>
+            </div>
+          </div>
+          <div class="status-pill" id="serviceState">Ready</div>
+        </header>
+
+        <form id="convertForm" class="studio" autocomplete="off">
+          <section class="live-card" aria-label="录音工作台">
+            <div class="live-head">
+              <div class="live-title">
+                <span class="live-icon" aria-hidden="true">▮▮</span>
+                <span id="liveLabel">Live</span>
+              </div>
+              <button class="icon-button ghost" id="clearBtn" type="button" title="清空音频" aria-label="清空音频">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+
+            <div class="wave-wrap" id="waveWrap">
+              <canvas id="waveCanvas" width="720" height="420" aria-hidden="true"></canvas>
+              <div class="wave-copy">
+                <p id="recordTimer">00:00</p>
+                <span id="recordState">按住乡音，从这里开始</span>
+              </div>
+            </div>
+
+            <div class="dialect-row" role="radiogroup" aria-label="选择目标方言">
+              <label class="dialect-option">
+                <input type="radio" name="dialect" value="cantonese" checked />
+                <span>粤语</span>
+              </label>
+              <label class="dialect-option">
+                <input type="radio" name="dialect" value="sichuanese" />
+                <span>四川话</span>
+              </label>
+              <label class="dialect-option">
+                <input type="radio" name="dialect" value="hokkien" />
+                <span>闽南话</span>
+              </label>
+            </div>
+
+            <div class="transport">
+              <label class="round-button add-button" for="audioInput" title="上传音频" aria-label="上传音频">
+                <span aria-hidden="true">+</span>
+              </label>
+              <button class="round-button" id="recordBtn" type="button" title="开始录音" aria-label="开始录音">
+                <span aria-hidden="true">●</span>
+              </button>
+              <button class="round-button danger" id="stopBtn" type="button" disabled title="停止录音" aria-label="停止录音">
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+
+            <input id="audioInput" name="audio" type="file" accept="audio/*" />
+            <div class="audio-chip" id="audioChip" hidden>
+              <div>
+                <strong id="audioName">已选择音频</strong>
+                <span id="audioMeta">等待生成</span>
+              </div>
+              <audio id="preview" controls preload="metadata"></audio>
+            </div>
+          </section>
+
+          <section class="action-panel" aria-label="生成设置">
+            <div class="value-grid">
+              <article>
+                <strong>语言多样性保护</strong>
+                <span>抢救濒危方言词汇与口语表达。</span>
+              </article>
+              <article>
+                <strong>代际沟通</strong>
+                <span>让年轻人用自己的声音靠近家乡话。</span>
+              </article>
+              <article>
+                <strong>文化寻根</strong>
+                <span>连接侨乡记忆与数字人文方法。</span>
+              </article>
+            </div>
+
+            <button class="primary" type="submit" id="submitBtn">
+              <span>生成我的方言音色</span>
+              <small>ASR · 方言改写 · Voice Matched</small>
+            </button>
+
+            <ol class="steps" id="steps" aria-label="处理进度">
+              <li data-step="upload">接收音频</li>
+              <li data-step="asr">识别原文</li>
+              <li data-step="rewrite">改写方言</li>
+              <li data-step="clone">复刻音色</li>
+            </ol>
+          </section>
+        </form>
       </section>
 
-      <section class="workspace">
-        <form id="convertForm" class="panel">
-          <label class="field">
-            <span>选择目标方言</span>
-            <select name="dialect" id="dialect">
-              <option value="cantonese">粤语</option>
-              <option value="sichuanese">四川话</option>
-              <option value="hokkien">闽南话</option>
-            </select>
-          </label>
-
-          <div class="field">
-            <span>录音或上传</span>
-            <div class="recorder">
-              <button type="button" id="recordBtn">开始录音</button>
-              <button type="button" id="stopBtn" disabled>停止</button>
-              <span id="recordState">未录音</span>
-            </div>
-            <input id="audioInput" name="audio" type="file" accept="audio/*" />
-            <audio id="preview" controls></audio>
-          </div>
-
-          <button class="primary" type="submit" id="submitBtn">生成方言复刻语音</button>
-          <p class="hint">建议参考音频 10-20 秒，环境安静，避免多人说话。</p>
-        </form>
-
-        <section class="result panel" id="result">
-          <div class="empty">生成结果会显示在这里。</div>
-        </section>
+      <section class="result-panel" id="result" aria-live="polite">
+        <div class="empty-state">
+          <p>生成结果会出现在这里。</p>
+          <span>推荐录制 10-20 秒，环境安静，单人说话，音色复刻会更稳。</span>
+        </div>
       </section>
     </main>
     <script src="/static/app.js"></script>
   </body>
 </html>
-

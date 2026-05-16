@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 from .config import ROOT_DIR, settings
 from .models import HealthResult
 from .pipeline import convert_audio
-from .storage import ensure_dirs, new_job_id, save_upload
+from .storage import ensure_dirs, new_job_id, save_upload, update_job_metadata
 
 
 ensure_dirs()
@@ -64,7 +64,18 @@ async def convert(
     job_id = new_job_id()
     try:
         audio_path = await save_upload(audio, job_id)
-        return await run_in_threadpool(convert_audio, job_id, audio_path, dialect)
+        result = await run_in_threadpool(convert_audio, job_id, audio_path, dialect)
+        update_job_metadata(
+            job_id,
+            {
+                "dialect": dialect,
+                "status": result.status,
+                "has_gold_audio": bool(result.gold_audio_url),
+                "has_voice_matched_audio": bool(result.voice_matched_audio_url),
+                "warning_count": len(result.warnings),
+            },
+        )
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
