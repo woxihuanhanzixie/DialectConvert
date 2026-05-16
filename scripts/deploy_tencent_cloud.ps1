@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 
 if (!(Test-Path $KeyPath)) {
   throw "SSH private key not found: $KeyPath"
@@ -28,7 +29,9 @@ if (!$PublicBaseUrl) {
 }
 
 ssh @sshOptions $target "mkdir -p $RemoteDir"
+if ($LASTEXITCODE -ne 0) { throw "SSH mkdir failed with exit code $LASTEXITCODE" }
 scp @sshOptions $archive "${target}:/tmp/dialect-convert-deploy.zip"
+if ($LASTEXITCODE -ne 0) { throw "SCP upload failed with exit code $LASTEXITCODE" }
 ssh @sshOptions $target @"
 set -e
 cd "$RemoteDir"
@@ -156,5 +159,6 @@ systemctl restart dialect-convert
 nginx -t && systemctl reload nginx
 systemctl --no-pager status dialect-convert
 "@
+if ($LASTEXITCODE -ne 0) { throw "Remote deployment failed with exit code $LASTEXITCODE" }
 
 Write-Host "Deployment finished. Visit: $PublicBaseUrl"
