@@ -3,7 +3,8 @@ param(
   [string]$HostName,
   [string]$User = "root",
   [string]$RemoteDir = "/opt/dialect-convert",
-  [string]$KeyPath = "C:\Users\34005\Downloads\dialectconvert_key.pem"
+  [string]$KeyPath = "C:\Users\34005\Downloads\dialectconvert_key.pem",
+  [string]$PublicBaseUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,9 +21,14 @@ $items = Get-ChildItem -Force | Where-Object { $exclude -notcontains $_.Name }
 Compress-Archive -Path $items.FullName -DestinationPath $archive -Force
 
 $target = "$User@$HostName"
-ssh -i $KeyPath $target "mkdir -p $RemoteDir"
-scp -i $KeyPath $archive "${target}:/tmp/dialect-convert-deploy.zip"
-ssh -i $KeyPath $target @"
+$sshOptions = @("-i", $KeyPath, "-o", "StrictHostKeyChecking=accept-new")
+if (!$PublicBaseUrl) {
+  $PublicBaseUrl = "http://${HostName}:7860"
+}
+
+ssh @sshOptions $target "mkdir -p $RemoteDir"
+scp @sshOptions $archive "${target}:/tmp/dialect-convert-deploy.zip"
+ssh @sshOptions $target @"
 set -e
 cd "$RemoteDir"
 if command -v unzip >/dev/null 2>&1; then
@@ -36,6 +42,16 @@ pip install -U pip
 pip install -r requirements.txt
 mkdir -p runtime_data/uploads runtime_data/outputs runtime_data/voice_cache
 if [ ! -f .env ]; then cp .env.prod.example .env || true; fi
+if grep -q '^PUBLIC_BASE_URL=' .env 2>/dev/null; then
+  sed -i "s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=$PublicBaseUrl|" .env
+else
+  printf '\nPUBLIC_BASE_URL=$PublicBaseUrl\n' >> .env
+fi
+if grep -q '^PUBLIC_APP_ORIGIN=' .env 2>/dev/null; then
+  sed -i "s|^PUBLIC_APP_ORIGIN=.*|PUBLIC_APP_ORIGIN=$PublicBaseUrl|" .env
+else
+  printf 'PUBLIC_APP_ORIGIN=$PublicBaseUrl\n' >> .env
+fi
 cat >/etc/systemd/system/dialect-convert.service <<'SERVICE'
 [Unit]
 Description=Dialect Convert Voice Clone Web Service
@@ -59,4 +75,3 @@ systemctl --no-pager status dialect-convert
 "@
 
 Write-Host "Deployment finished. Visit: http://$HostName:7860"
-
