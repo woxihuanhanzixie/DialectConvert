@@ -6,6 +6,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from .config import ROOT_DIR, settings
 from .models import HealthResult
@@ -63,9 +64,8 @@ async def convert(
     job_id = new_job_id()
     try:
         audio_path = await save_upload(audio, job_id)
-        return convert_audio(job_id, audio_path, dialect)
+        return await run_in_threadpool(convert_audio, job_id, audio_path, dialect)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-

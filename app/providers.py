@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import json
+import shutil
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -24,6 +26,12 @@ def _headers(api_key: str | None = None) -> dict[str, str]:
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
     }
+
+
+def _async_headers(api_key: str | None = None) -> dict[str, str]:
+    headers = _headers(api_key)
+    headers["X-DashScope-Async"] = "enable"
+    return headers
 
 
 def _request_json(method: str, url: str, *, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
@@ -104,6 +112,88 @@ def _extract_audio_from_json(data: dict[str, Any]) -> bytes | None:
     return None
 
 
+def _find_first_url(data: Any) -> str | None:
+    if isinstance(data, str) and data.startswith("http"):
+        return data
+    if isinstance(data, list):
+        for item in data:
+            found = _find_first_url(item)
+            if found:
+                return found
+        return None
+    if isinstance(data, dict):
+        for key in ("url", "audio_url", "file_url"):
+            value = data.get(key)
+            if isinstance(value, str) and value.startswith("http"):
+                return value
+        for value in data.values():
+            found = _find_first_url(value)
+            if found:
+                return found
+    return None
+
+
+def _download_audio_url(url: str) -> bytes:
+    last_error: Exception | None = None
+    for attempt in range(settings.max_retries):
+        try:
+            resp = requests.get(url, timeout=settings.request_timeout_s)
+            if resp.status_code in {429, 500, 502, 503, 504}:
+                raise ProviderError(f"HTTP {resp.status_code}: {resp.text[:300]}")
+            resp.raise_for_status()
+            return resp.content
+        except (requests.Timeout, requests.ConnectionError, requests.HTTPError, ProviderError) as exc:
+            last_error = exc
+            if attempt + 1 >= settings.max_retries:
+                break
+            time.sleep(1.5 * (2**attempt))
+    raise ProviderError(str(last_error or "audio download failed"))
+
+
+def _request_async_task(url: str, payload: dict[str, Any]) -> dict[str, Any]:
+    data = _request_json("POST", url, headers=_async_headers(), payload=payload)
+    task_id = data.get("output", {}).get("task_id") or data.get("task_id")
+    if not task_id:
+        return data
+    task_url = f"{settings.dashscope_task_url.rstrip('/')}/{task_id}"
+    for _ in range(80):
+        task = _request_json("GET", task_url, headers=_headers(), payload={})
+        status = task.get("output", {}).get("task_status") or task.get("task_status")
+        if status in {"SUCCEEDED", "SUCCESS", "COMPLETED"}:
+            return task
+        if status in {"FAILED", "CANCELED", "UNKNOWN"}:
+            raise ProviderError(f"异步语音任务失败: {str(task)[:500]}")
+        time.sleep(2)
+    raise ProviderError("异步语音任务超时")
+
+
+def _audio_for_voice_clone(audio_path: Path) -> Path:
+    if audio_path.suffix.lower() in {".wav", ".mp3", ".m4a"}:
+        return audio_path
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise ProviderError("当前音频格式需要 ffmpeg 转码，请上传 wav/mp3/m4a 或在服务器安装 ffmpeg")
+    converted = audio_path.with_suffix(".mp3")
+    command = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(audio_path),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "24000",
+        "-b:a",
+        "128k",
+        str(converted),
+    ]
+    proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+    if proc.returncode != 0 or not converted.exists() or converted.stat().st_size == 0:
+        raise ProviderError(f"音频转码失败，请换 wav/mp3/m4a 文件: {proc.stderr[-300:]}")
+    return converted
+
+
 def transcribe_audio(audio_path: Path) -> str:
     if settings.enable_mock_when_no_key and not settings.dashscope_api_key:
         return "我想把这句话变成家乡话，让更多年轻人听见方言的味道。"
@@ -117,7 +207,7 @@ def transcribe_audio(audio_path: Path) -> str:
         "input": {"file_urls": [audio_url]},
         "parameters": {"channel_id": [0], "language_hints": ["zh", "yue", "nan"]},
     }
-    data = _request_json("POST", settings.asr_base_url, headers=_headers(), payload=payload)
+    data = _request_json("POST", settings.asr_base_url, headers=_async_headers(), payload=payload)
     task_id = data.get("output", {}).get("task_id") or data.get("task_id")
     if task_id:
         return _poll_asr_task(task_id)
@@ -128,7 +218,7 @@ def transcribe_audio(audio_path: Path) -> str:
 
 
 def _poll_asr_task(task_id: str) -> str:
-    url = f"{settings.asr_base_url}/{task_id}"
+    url = f"{settings.dashscope_task_url.rstrip('/')}/{task_id}"
     for _ in range(40):
         data = _request_json("GET", url, headers=_headers(), payload={})
         status = data.get("output", {}).get("task_status") or data.get("task_status")
@@ -136,11 +226,35 @@ def _poll_asr_task(task_id: str) -> str:
             text = _extract_text(data)
             if text:
                 return text
+            transcription_url = _find_transcription_url(data)
+            if transcription_url:
+                transcript = requests.get(transcription_url, timeout=settings.request_timeout_s)
+                transcript.raise_for_status()
+                text = _extract_text(transcript.json())
+                if text:
+                    return text
             raise ProviderError(f"ASR 任务完成但未找到文本: {str(data)[:500]}")
         if status in {"FAILED", "CANCELED"}:
             raise ProviderError(f"ASR 任务失败: {str(data)[:500]}")
         time.sleep(2)
     raise ProviderError("ASR 任务超时")
+
+
+def _find_transcription_url(data: Any) -> str | None:
+    if isinstance(data, list):
+        for item in data:
+            found = _find_transcription_url(item)
+            if found:
+                return found
+    if isinstance(data, dict):
+        value = data.get("transcription_url")
+        if isinstance(value, str) and value.startswith("http"):
+            return value
+        for item in data.values():
+            found = _find_transcription_url(item)
+            if found:
+                return found
+    return None
 
 
 def _extract_text(data: Any) -> str:
@@ -213,17 +327,18 @@ def enroll_voice(audio_path: Path, cache_voice_id: str | None = None) -> str:
         return cache_voice_id
     if settings.enable_mock_when_no_key and not settings.dashscope_api_key:
         return "mock_voice_id"
+    audio_path = _audio_for_voice_clone(audio_path)
     audio_url = media_url_to_public(public_url_for(audio_path))
     if not audio_url.startswith("http"):
         raise ProviderError("音色克隆注册需要 PUBLIC_BASE_URL 指向公网可访问的参考音频")
     payload = {
         "model": settings.qwen_voice_enrollment_model,
         "input": {
+            "action": "create_voice",
+            "target_model": settings.qwen_voice_target_model,
+            "prefix": f"dc{int(time.time()) % 100000000}",
+            "url": audio_url,
             "audio_url": audio_url,
-            "target_model": settings.qwen_voice_target_model,
-        },
-        "parameters": {
-            "target_model": settings.qwen_voice_target_model,
         },
     }
     data = _request_json("POST", settings.qwen_voice_enrollment_url, headers=_headers(), payload=payload)
@@ -246,18 +361,26 @@ def synthesize(text: str, output_path: Path, *, voice: str, model: str | None = 
     model = model or settings.qwen_tts_model
     base = settings.qwen_tts_base_url.rstrip("/")
     if "/compatible-mode/" in base:
-        url = f"{base}/audio/speech"
-        payload = {"model": model, "input": text, "voice": voice, "response_format": "mp3"}
-        binary, ext = _request_binary("POST", url, headers=_headers(), payload=payload)
+        base = "https://dashscope.aliyuncs.com"
+    url = f"{base}/api/v1/services/audio/tts/SpeechSynthesizer"
+    payload = {
+        "model": model,
+        "input": {
+            "text": text,
+            "voice": voice,
+            "format": "mp3",
+            "sample_rate": 24000,
+        },
+    }
+    data = _request_json("POST", url, headers=_headers(), payload=payload)
+    audio = _extract_audio_from_json(data)
+    if audio:
+        binary, ext = audio, ".mp3"
     else:
-        url = f"{base}/api/v1/services/aigc/multimodal-generation/generation"
-        payload = {
-            "model": model,
-            "input": {"text": text, "voice": voice},
-            "parameters": {"format": "mp3"},
-        }
-        binary, ext = _request_binary("POST", url, headers=_headers(), payload=payload)
+        audio_url = _find_first_url(data)
+        if not audio_url:
+            raise ProviderError(f"TTS 未返回音频 URL: {str(data)[:500]}")
+        binary, ext = _download_audio_url(audio_url), ".mp3"
     final_path = output_path.with_suffix(ext)
     atomic_write_bytes(final_path, binary)
     return public_url_for(final_path)
-

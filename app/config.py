@@ -57,19 +57,20 @@ class Settings:
     asr_model: str = _env("ASR_MODEL", "paraformer-v2")
     asr_base_url: str = _env("ASR_BASE_URL", "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription")
 
-    tts_provider: str = _env("TTS_PROVIDER", "dashscope_qwen")
+    tts_provider: str = _env("TTS_PROVIDER", "dashscope_cosyvoice")
     qwen_tts_base_url: str = _env("QWEN_TTS_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-    qwen_tts_model: str = _env("QWEN_TTS_MODEL", "qwen-tts")
-    qwen_tts_voice: str = _env("QWEN_TTS_VOICE", "Cherry")
+    qwen_tts_model: str = _env("QWEN_TTS_MODEL", "cosyvoice-v3-flash")
+    qwen_tts_voice: str = _env("QWEN_TTS_VOICE", "longanyang")
 
-    voice_match_provider: str = _env("VOICE_MATCH_PROVIDER", "qwen_voice_clone")
-    qwen_voice_enrollment_model: str = _env("QWEN_VOICE_ENROLLMENT_MODEL", "qwen-voice-enrollment")
-    qwen_voice_target_model: str = _env("QWEN_VOICE_TARGET_MODEL", "qwen3-tts-vc-2026-01-22")
+    voice_match_provider: str = _env("VOICE_MATCH_PROVIDER", "cosyvoice_clone")
+    qwen_voice_enrollment_model: str = _env("QWEN_VOICE_ENROLLMENT_MODEL", "voice-enrollment")
+    qwen_voice_target_model: str = _env("QWEN_VOICE_TARGET_MODEL", "cosyvoice-v3-flash")
     qwen_voice_enrollment_url: str = _env(
         "QWEN_VOICE_ENROLLMENT_URL",
-        "https://dashscope.aliyuncs.com/api/v1/services/aigc/audio-generation/voice-enrollment",
+        "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization",
     )
-    qwen_tts_vc_model: str = _env("QWEN_TTS_VC_MODEL", "qwen3-tts-vc-2026-01-22")
+    qwen_tts_vc_model: str = _env("QWEN_TTS_VC_MODEL", "cosyvoice-v3-flash")
+    dashscope_task_url: str = _env("DASHSCOPE_TASK_URL", "https://dashscope.aliyuncs.com/api/v1/tasks")
 
     data_dir: Path = ROOT_DIR / "runtime_data"
     upload_dir: Path = data_dir / "uploads"

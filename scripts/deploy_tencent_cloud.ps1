@@ -17,7 +17,7 @@ if (!(Test-Path $KeyPath)) {
 $archive = Join-Path $env:TEMP "dialect-convert-deploy.zip"
 if (Test-Path $archive) { Remove-Item $archive -Force }
 
-$exclude = @(".git", ".vscode", "runtime_data", "__pycache__", ".pytest_cache", ".venv", "venv")
+$exclude = @(".git", ".vscode", ".env", "runtime_data", "__pycache__", ".pytest_cache", ".venv", "venv")
 $items = Get-ChildItem -Force | Where-Object { $exclude -notcontains $_.Name }
 Compress-Archive -Path $items.FullName -DestinationPath $archive -Force
 
@@ -53,6 +53,58 @@ if grep -q '^PUBLIC_APP_ORIGIN=' .env 2>/dev/null; then
 else
   printf 'PUBLIC_APP_ORIGIN=$PublicBaseUrl\n' >> .env
 fi
+for kv in \
+  'TTS_PROVIDER=dashscope_cosyvoice' \
+  'VOICE_MATCH_PROVIDER=cosyvoice_clone' \
+  'QWEN_TTS_BASE_URL=https://dashscope.aliyuncs.com' \
+  'QWEN_TTS_MODEL=cosyvoice-v3-flash' \
+  'QWEN_TTS_VOICE=longanyang' \
+  'QWEN_VOICE_ENROLLMENT_MODEL=voice-enrollment' \
+  'QWEN_VOICE_TARGET_MODEL=cosyvoice-v3-flash' \
+  'QWEN_TTS_VC_MODEL=cosyvoice-v3-flash' \
+  'QWEN_VOICE_ENROLLMENT_URL=https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization'
+do
+  key="`${kv%%=*}"
+  if grep -q "^`$key=" .env 2>/dev/null; then
+    sed -i "s|^`$key=.*|`$kv|" .env
+  else
+    printf '%s\n' "`$kv" >> .env
+  fi
+done
+python3 - <<'PYENV'
+from pathlib import Path
+
+path = Path(".env")
+raw = path.read_text(encoding="utf-8-sig") if path.exists() else ""
+lines = [line for line in raw.replace("\ufeff", "").splitlines() if line.strip()]
+updates = {
+    "PUBLIC_BASE_URL": "$PublicBaseUrl",
+    "PUBLIC_APP_ORIGIN": "$PublicBaseUrl",
+    "TTS_PROVIDER": "dashscope_cosyvoice",
+    "VOICE_MATCH_PROVIDER": "cosyvoice_clone",
+    "QWEN_TTS_BASE_URL": "https://dashscope.aliyuncs.com",
+    "QWEN_TTS_MODEL": "cosyvoice-v3-flash",
+    "QWEN_TTS_VOICE": "longanyang",
+    "QWEN_VOICE_ENROLLMENT_MODEL": "voice-enrollment",
+    "QWEN_VOICE_TARGET_MODEL": "cosyvoice-v3-flash",
+    "QWEN_TTS_VC_MODEL": "cosyvoice-v3-flash",
+    "QWEN_VOICE_ENROLLMENT_URL": "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization",
+}
+seen = set()
+out = []
+for line in lines:
+    key = line.split("=", 1)[0].strip()
+    if key in updates:
+        if key not in seen:
+            out.append(f"{key}={updates[key]}")
+            seen.add(key)
+    else:
+        out.append(line)
+for key, value in updates.items():
+    if key not in seen:
+        out.append(f"{key}={value}")
+path.write_text("\n".join(out) + "\n", encoding="utf-8")
+PYENV
 cat >/etc/systemd/system/dialect-convert.service <<'SERVICE'
 [Unit]
 Description=Dialect Convert Voice Clone Web Service
