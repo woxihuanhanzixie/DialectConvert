@@ -19,7 +19,8 @@ def test_convert_audio_prefers_voice_matched(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline, "write_voice_cache", lambda key, payload: None)
     monkeypatch.setattr(pipeline, "enroll_voice", lambda path: "voice-1")
 
-    def fake_synth(text, output_path, *, voice, model=None):
+    def fake_synth(text, output_path, *, voice, model=None, instruction=None, language_hint="zh"):
+        assert instruction
         return f"/media/{output_path.name}-{voice}.mp3"
 
     monkeypatch.setattr(pipeline, "synthesize", fake_synth)
@@ -29,4 +30,3 @@ def test_convert_audio_prefers_voice_matched(monkeypatch, tmp_path):
     assert result.dialect_text == "我要保护家乡话噻"
     assert result.voice_id == "voice-1"
     assert result.recommended_audio_url == result.voice_matched_audio_url
-

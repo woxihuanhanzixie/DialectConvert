@@ -353,7 +353,15 @@ def enroll_voice(audio_path: Path, cache_voice_id: str | None = None) -> str:
     return str(voice_id)
 
 
-def synthesize(text: str, output_path: Path, *, voice: str, model: str | None = None) -> str:
+def synthesize(
+    text: str,
+    output_path: Path,
+    *,
+    voice: str,
+    model: str | None = None,
+    instruction: str | None = None,
+    language_hint: str = "zh",
+) -> str:
     if settings.enable_mock_when_no_key and not settings.dashscope_api_key:
         output_path.write_bytes(b"")
         return public_url_for(output_path)
@@ -370,8 +378,11 @@ def synthesize(text: str, output_path: Path, *, voice: str, model: str | None = 
             "voice": voice,
             "format": "mp3",
             "sample_rate": 24000,
+            "language_hints": [language_hint],
         },
     }
+    if instruction:
+        payload["input"]["instruction"] = instruction
     data = _request_json("POST", url, headers=_headers(), payload=payload)
     audio = _extract_audio_from_json(data)
     if audio:

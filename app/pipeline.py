@@ -14,6 +14,22 @@ from .storage import (
 )
 
 
+DIALECT_TTS_CONTROLS = {
+    "cantonese": {
+        "instruction": "请用广东话表达。",
+        "language_hint": "zh",
+    },
+    "sichuanese": {
+        "instruction": "请用四川话表达。",
+        "language_hint": "zh",
+    },
+    "hokkien": {
+        "instruction": "请用闽南话表达。",
+        "language_hint": "zh",
+    },
+}
+
+
 def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResult:
     cleanup_runtime()
     warnings: list[str] = []
@@ -21,6 +37,12 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
     source_text = transcribe_audio(audio_path)
     rewritten = rewrite_to_dialect(source_text, dialect)
     dialect_text = rewritten["dialect_text"]
+    tts_control = DIALECT_TTS_CONTROLS[dialect]
+    # CosyVoice dialect pronunciation is controlled by instruction. The
+    # rewritten text is still displayed to the user, but synthesis uses the
+    # semantic source text plus dialect instruction to avoid Mandarin reading
+    # of Cantonese/Sichuanese/Hokkien characters.
+    synthesis_text = source_text
 
     gold_audio_url = None
     voice_matched_audio_url = None
@@ -28,10 +50,12 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
 
     try:
         gold_audio_url = synthesize(
-            dialect_text,
+            synthesis_text,
             local_output_path(job_id, "gold"),
             voice=settings.qwen_tts_voice,
             model=settings.qwen_tts_model,
+            instruction=tts_control["instruction"],
+            language_hint=tts_control["language_hint"],
         )
     except ProviderError as exc:
         warnings.append(f"Gold Teacher 合成失败：{exc}")
@@ -51,10 +75,12 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
                 },
             )
         voice_matched_audio_url = synthesize(
-            dialect_text,
+            synthesis_text,
             local_output_path(job_id, "voice_matched"),
             voice=voice_id,
             model=settings.qwen_voice_target_model,
+            instruction=tts_control["instruction"],
+            language_hint=tts_control["language_hint"],
         )
     except ProviderError as exc:
         warnings.append(f"Voice Matched 克隆音色合成失败，已保留 Gold Teacher：{exc}")
@@ -74,4 +100,3 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
         status=status,
         warnings=warnings,
     )
-
