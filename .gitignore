@@ -1,0 +1,55 @@
+## Root-level local environments and caches
+.conda_pkgs/
+.trae/
+openvoice_gpu_venv/
+wheel_cache/
+
+## IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets
+.env
+.env.*
+
+## Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+## Build artifacts
+build/
+dist/
+*.egg-info/
+*.tar.gz
+tools/
+
+## Project runtime/model artifacts
+runtime_data/
+FireRedASR2S/pretrained_models/
+FireRedASR2S/runtime_data/models/
+FireRedASR2S/runtime_data/asr_output/
+FireRedASR2S/runtime_data/tmp/
+FireRedASR2S/runtime_data/step2_output/
+FireRedASR2S/runtime_data/audio_16k/
+FireRedASR2S/runtime_data/web_demo_uploads/
+FireRedASR2S/runtime_data/web_demo_refs/
+FireRedASR2S/runtime_data/**/*.wav
+FireRedASR2S/runtime_data/**/*.pth
+FireRedASR2S/runtime_data/**/*.bin
+FireRedASR2S/runtime_data/**/*.pt
+FireRedASR2S/runtime_data/**/*.jsonl
+FireRedASR2S/runtime_data/**/*.json
+FireRedASR2S/rvc_runtime_space/
+
+## OpenVoice runtime cache
+OpenVoiceRuntime/cache/

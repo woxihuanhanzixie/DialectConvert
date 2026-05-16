@@ -1,0 +1,137 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import time
+import uuid
+from pathlib import Path
+
+from fastapi import UploadFile
+
+from .config import settings
+
+
+ALLOWED_AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".webm", ".flac", ".amr"}
+
+
+def ensure_dirs() -> None:
+    for path in (settings.upload_dir, settings.output_dir, settings.cache_dir):
+        path.mkdir(parents=True, exist_ok=True)
+
+
+def new_job_id() -> str:
+    return uuid.uuid4().hex[:16]
+
+
+def safe_ext(filename: str | None, content_type: str | None = None) -> str:
+    ext = Path(filename or "").suffix.lower()
+    if ext in ALLOWED_AUDIO_EXTS:
+        return ext
+    if content_type:
+        if "webm" in content_type:
+            return ".webm"
+        if "mpeg" in content_type or "mp3" in content_type:
+            return ".mp3"
+        if "wav" in content_type:
+            return ".wav"
+        if "ogg" in content_type:
+            return ".ogg"
+        if "mp4" in content_type or "m4a" in content_type:
+            return ".m4a"
+    return ".wav"
+
+
+async def save_upload(upload: UploadFile, job_id: str) -> Path:
+    ensure_dirs()
+    ext = safe_ext(upload.filename, upload.content_type)
+    target = settings.upload_dir / f"{job_id}{ext}"
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    size = 0
+    with target.open("wb") as fh:
+        while True:
+            chunk = await upload.read(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > max_bytes:
+                fh.close()
+                target.unlink(missing_ok=True)
+                raise ValueError(f"音频过大，请控制在 {settings.max_upload_mb} MB 以内")
+            fh.write(chunk)
+    return target
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def public_url_for(path: Path) -> str:
+    rel = path.relative_to(settings.data_dir).as_posix()
+    if settings.public_base_url:
+        return f"{settings.public_base_url.rstrip('/')}/media/{rel}"
+    return f"/media/{rel}"
+
+
+def media_url_to_public(url: str) -> str:
+    if url.startswith("/media/") and settings.public_base_url:
+        return f"{settings.public_base_url.rstrip('/')}{url}"
+    return url
+
+
+def voice_cache_key(audio_path: Path, target_model: str) -> str:
+    return hashlib.sha256(f"{sha256_file(audio_path)}:{target_model}".encode("utf-8")).hexdigest()
+
+
+def read_voice_cache(cache_key: str) -> dict | None:
+    path = settings.cache_dir / f"{cache_key}.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if data.get("status") == "ok" and data.get("voice_id"):
+        return data
+    return None
+
+
+def write_voice_cache(cache_key: str, payload: dict) -> None:
+    settings.cache_dir.mkdir(parents=True, exist_ok=True)
+    payload = {**payload, "updated_at": int(time.time())}
+    (settings.cache_dir / f"{cache_key}.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def cleanup_runtime() -> int:
+    ensure_dirs()
+    cutoff = time.time() - settings.cleanup_after_hours * 3600
+    removed = 0
+    for root in (settings.upload_dir, settings.output_dir):
+        for path in root.glob("*"):
+            if path.is_file() and path.stat().st_mtime < cutoff:
+                path.unlink(missing_ok=True)
+                removed += 1
+    for path in settings.cache_dir.glob("*.json"):
+        if path.is_file() and path.stat().st_mtime < cutoff * 0.2:
+            # Voice IDs may stay useful much longer than raw media; keep cache by default.
+            continue
+    return removed
+
+
+def local_output_path(job_id: str, label: str, ext: str = ".mp3") -> Path:
+    ensure_dirs()
+    return settings.output_dir / f"{job_id}_{label}{ext}"
+
+
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
+

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>声临其境</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">AI 方言音色复刻</p>
+          <h1>声临其境</h1>
+          <p class="lead">录一段你的声音，生成同一音色说出的粤语、四川话或闽南话。</p>
+        </div>
+        <div class="theme-card">
+          <strong>语言多样性保护</strong>
+          <span>让乡音从档案里走出来，进入年轻人的日常表达。</span>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <form id="convertForm" class="panel">
+          <label class="field">
+            <span>选择目标方言</span>
+            <select name="dialect" id="dialect">
+              <option value="cantonese">粤语</option>
+              <option value="sichuanese">四川话</option>
+              <option value="hokkien">闽南话</option>
+            </select>
+          </label>
+
+          <div class="field">
+            <span>录音或上传</span>
+            <div class="recorder">
+              <button type="button" id="recordBtn">开始录音</button>
+              <button type="button" id="stopBtn" disabled>停止</button>
+              <span id="recordState">未录音</span>
+            </div>
+            <input id="audioInput" name="audio" type="file" accept="audio/*" />
+            <audio id="preview" controls></audio>
+          </div>
+
+          <button class="primary" type="submit" id="submitBtn">生成方言复刻语音</button>
+          <p class="hint">建议参考音频 10-20 秒，环境安静，避免多人说话。</p>
+        </form>
+
+        <section class="result panel" id="result">
+          <div class="empty">生成结果会显示在这里。</div>
+        </section>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
+
