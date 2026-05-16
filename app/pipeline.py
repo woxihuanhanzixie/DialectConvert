@@ -16,18 +16,18 @@ from .storage import (
 
 DIALECT_TTS_CONTROLS = {
     "cantonese": {
-        # CosyVoice dialect control is documented as a fixed English
-        # instruction. Free-form Chinese instructions are much less stable and
-        # can be ignored by cloned voices.
-        "instruction": "Speak in Cantonese.",
+        # Store the official Chinese CosyVoice instructions as Unicode escapes
+        # so Windows consoles, ZIP packaging, and SSH sessions cannot corrupt
+        # them into mojibake before they reach DashScope.
+        "instruction": "\u8bf7\u7528\u5e7f\u4e1c\u8bdd\u8868\u8fbe\u3002",
         "language_hint": "zh",
     },
     "sichuanese": {
-        "instruction": "Speak in Sichuan Mandarin.",
+        "instruction": "\u8bf7\u7528\u56db\u5ddd\u8bdd\u8868\u8fbe\u3002",
         "language_hint": "zh",
     },
     "hokkien": {
-        "instruction": "Speak in Minnan.",
+        "instruction": "\u8bf7\u7528\u95fd\u5357\u8bdd\u8868\u8fbe\u3002",
         "language_hint": "zh",
     },
 }
