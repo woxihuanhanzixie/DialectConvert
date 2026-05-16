@@ -4,6 +4,7 @@ param(
   [string]$User = "root",
   [string]$RemoteDir = "/opt/dialect-convert",
   [string]$KeyPath = "C:\Users\34005\Downloads\dialectconvert_key.pem",
+  [int]$AppPort = 7860,
   [string]$PublicBaseUrl = ""
 )
 
@@ -16,14 +17,14 @@ if (!(Test-Path $KeyPath)) {
 $archive = Join-Path $env:TEMP "dialect-convert-deploy.zip"
 if (Test-Path $archive) { Remove-Item $archive -Force }
 
-$exclude = @(".git", "runtime_data", "__pycache__", ".pytest_cache", ".venv", "venv")
+$exclude = @(".git", ".vscode", "runtime_data", "__pycache__", ".pytest_cache", ".venv", "venv")
 $items = Get-ChildItem -Force | Where-Object { $exclude -notcontains $_.Name }
 Compress-Archive -Path $items.FullName -DestinationPath $archive -Force
 
 $target = "$User@$HostName"
 $sshOptions = @("-i", $KeyPath, "-o", "StrictHostKeyChecking=accept-new")
 if (!$PublicBaseUrl) {
-  $PublicBaseUrl = "http://${HostName}:7860"
+  $PublicBaseUrl = "http://${HostName}"
 }
 
 ssh @sshOptions $target "mkdir -p $RemoteDir"
@@ -61,17 +62,47 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/dialect-convert
 EnvironmentFile=/opt/dialect-convert/.env
-ExecStart=/opt/dialect-convert/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 7860
+ExecStart=/opt/dialect-convert/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port APP_PORT_PLACEHOLDER
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 SERVICE
+sed -i "s|APP_PORT_PLACEHOLDER|$AppPort|g" /etc/systemd/system/dialect-convert.service
+mkdir -p /etc/nginx/conf.d
+[ -f /etc/nginx/conf.d/demo1.conf ] && mv -f /etc/nginx/conf.d/demo1.conf /etc/nginx/conf.d/demo1.conf.bak-dialect || true
+[ -f /etc/nginx/conf.d/dialect_public.conf ] && mv -f /etc/nginx/conf.d/dialect_public.conf /etc/nginx/conf.d/dialect_public.conf.bak-dialect || true
+cat >/etc/nginx/conf.d/dialect_convert.conf <<'NGINX'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $HostName _;
+
+    client_max_body_size 80m;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+    proxy_connect_timeout 60s;
+
+    location / {
+        proxy_pass http://127.0.0.1:APP_PORT_PLACEHOLDER;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_set_header Upgrade `$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host `$host;
+        proxy_set_header X-Real-IP `$remote_addr;
+        proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto `$scheme;
+    }
+}
+NGINX
+sed -i "s|APP_PORT_PLACEHOLDER|$AppPort|g" /etc/nginx/conf.d/dialect_convert.conf
 systemctl daemon-reload
 systemctl enable dialect-convert
 systemctl restart dialect-convert
+nginx -t && systemctl reload nginx
 systemctl --no-pager status dialect-convert
 "@
 
-Write-Host "Deployment finished. Visit: http://$HostName:7860"
+Write-Host "Deployment finished. Visit: $PublicBaseUrl"
