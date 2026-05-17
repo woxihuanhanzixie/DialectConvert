@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 from .config import ROOT_DIR, settings
 from .models import HealthResult
 from .pipeline import convert_audio
-from .storage import ensure_dirs, new_job_id, save_upload, update_job_metadata
+from .storage import ALLOWED_AUDIO_EXTS, ensure_dirs, new_job_id, save_upload, update_job_metadata
 
 
 ensure_dirs()
@@ -50,6 +50,14 @@ def health() -> HealthResult:
     )
 
 
+def _is_supported_upload(upload: UploadFile) -> bool:
+    suffix = Path(upload.filename or "").suffix.lower()
+    if suffix in ALLOWED_AUDIO_EXTS:
+        return True
+    content_type = (upload.content_type or "").lower()
+    return content_type.startswith("audio/") or content_type in {"video/mp4", "video/quicktime"}
+
+
 @app.post("/api/convert")
 async def convert(
     dialect: str = Form(...),
@@ -57,10 +65,8 @@ async def convert(
 ):
     if dialect not in {"cantonese", "sichuanese", "hokkien"}:
         raise HTTPException(status_code=400, detail="暂只支持粤语、四川话、闽南话")
-    if not audio.content_type or not audio.content_type.startswith("audio/"):
-        suffix = Path(audio.filename or "").suffix.lower()
-        if suffix not in {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".webm", ".flac", ".amr"}:
-            raise HTTPException(status_code=400, detail="请上传音频文件")
+    if not _is_supported_upload(audio):
+        raise HTTPException(status_code=400, detail="请上传音频文件")
     job_id = new_job_id()
     try:
         audio_path = await save_upload(audio, job_id)

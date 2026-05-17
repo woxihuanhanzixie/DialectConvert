@@ -15,6 +15,7 @@ const audioMeta = document.querySelector("#audioMeta");
 const serviceState = document.querySelector("#serviceState");
 const waveCanvas = document.querySelector("#waveCanvas");
 const waveWrap = document.querySelector("#waveWrap");
+const liveLabel = document.querySelector("#liveLabel");
 const steps = [...document.querySelectorAll("#steps li")];
 
 const ctx = waveCanvas.getContext("2d");
@@ -28,7 +29,14 @@ const state = {
   startedAt: 0,
   timerId: null,
   selectedFile: null,
+  selectedObjectUrl: "",
   demoPulse: 0,
+  pointerRecording: false,
+  pointerStartY: 0,
+  cancelOnStop: false,
+  ignoreNextClick: false,
+  fallbackTimerId: null,
+  nativeCaptureActive: false,
 };
 
 const dialectNames = {
@@ -37,22 +45,33 @@ const dialectNames = {
   hokkien: "闽南话",
 };
 
+const recorderTypes = [
+  { mimeType: "audio/mp4;codecs=mp4a.40.2", ext: "m4a" },
+  { mimeType: "audio/mp4", ext: "m4a" },
+  { mimeType: "audio/webm;codecs=opus", ext: "webm" },
+  { mimeType: "audio/webm", ext: "webm" },
+  { mimeType: "audio/ogg;codecs=opus", ext: "ogg" },
+  { mimeType: "audio/wav", ext: "wav" },
+];
+
+function getRecorderFormat() {
+  if (!window.MediaRecorder) return null;
+  const match = recorderTypes.find((item) => MediaRecorder.isTypeSupported(item.mimeType));
+  return match || { mimeType: "", ext: "webm" };
+}
+
 function supportsLiveMicrophone() {
   return Boolean(
     window.isSecureContext &&
       navigator.mediaDevices &&
       typeof navigator.mediaDevices.getUserMedia === "function" &&
-      window.MediaRecorder
+      window.MediaRecorder &&
+      getRecorderFormat()
   );
 }
 
-function openNativeRecorder(reason = "") {
-  recordState.textContent = "请在系统录音界面完成录制";
-  serviceState.textContent = "Native record";
-  if (reason) {
-    renderMessage(`${reason} 已切换到手机系统录音。录完后选择音频即可继续生成。`, "warn");
-  }
-  recordInput.click();
+function isLikelyMobile() {
+  return /Android|iPhone|iPad|iPod|Mobile|HarmonyOS|HongMeng/i.test(navigator.userAgent);
 }
 
 function formatTime(ms) {
@@ -64,7 +83,7 @@ function formatTime(ms) {
 
 function formatSize(bytes) {
   if (!bytes) return "0 KB";
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
@@ -120,32 +139,41 @@ function drawIdleWave() {
 }
 
 function drawLiveWave() {
-  if (!state.analyser) return;
   const width = waveCanvas.width;
   const height = waveCanvas.height;
-  const data = new Uint8Array(state.analyser.frequencyBinCount);
-  state.analyser.getByteTimeDomainData(data);
-
   ctx.clearRect(0, 0, width, height);
   const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "#080b10");
-  gradient.addColorStop(0.64, "#111827");
-  gradient.addColorStop(1, "#9fd1ff");
+  gradient.addColorStop(0, "#071019");
+  gradient.addColorStop(0.58, "#0c6ff6");
+  gradient.addColorStop(1, "#62d6ff");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = "#f8fbff";
-  ctx.beginPath();
-  const slice = width / data.length;
-  data.forEach((value, index) => {
-    const x = index * slice;
-    const y = (value / 255) * height;
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
+  const bars = 58;
+  const centerY = height * 0.66;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+  ctx.lineWidth = Math.max(4, width / 180);
 
+  let levels = null;
+  if (state.analyser) {
+    levels = new Uint8Array(state.analyser.frequencyBinCount);
+    state.analyser.getByteTimeDomainData(levels);
+  }
+  for (let i = 0; i < bars; i++) {
+    const x = width * 0.16 + (width * 0.68 * i) / (bars - 1);
+    const sample = levels ? Math.abs((levels[Math.floor((i / bars) * levels.length)] || 128) - 128) / 128 : 0.4;
+    const idle = 0.55 + Math.sin(state.demoPulse * 8 + i * 0.72) * 0.32;
+    const amp = Math.max(sample, idle * 0.24);
+    const h = 12 + amp * 68;
+    ctx.globalAlpha = 0.38 + amp * 0.62;
+    ctx.beginPath();
+    ctx.moveTo(x, centerY - h / 2);
+    ctx.lineTo(x, centerY + h / 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  state.demoPulse += 0.02;
   state.animationId = requestAnimationFrame(drawLiveWave);
 }
 
@@ -167,83 +195,177 @@ function stopTimer() {
   state.timerId = null;
 }
 
-function setPreview(file) {
+function renderMessage(message, level = "empty") {
+  result.innerHTML = `<div class="${level === "warn" ? "warn-card" : "empty-state"}"><p>${escapeHtml(message)}</p></div>`;
+}
+
+function setRecordingUi(message = "正在录音，松开发送，上滑取消") {
+  stopDrawing();
+  drawLiveWave();
+  startTimer();
+  recordBtn.disabled = false;
+  stopBtn.disabled = false;
+  waveWrap.classList.add("is-recording");
+  recordState.textContent = message;
+  serviceState.textContent = "Recording";
+  liveLabel.textContent = "Recording";
+}
+
+function resetRecordingUi() {
+  stopTimer();
+  stopDrawing();
+  recordBtn.disabled = false;
+  stopBtn.disabled = true;
+  waveWrap.classList.remove("is-recording", "is-canceling");
+  liveLabel.textContent = "Live";
+  drawIdleWave();
+}
+
+function makePreviewUrl(file) {
+  if (state.selectedObjectUrl) URL.revokeObjectURL(state.selectedObjectUrl);
+  state.selectedObjectUrl = URL.createObjectURL(file);
+  return state.selectedObjectUrl;
+}
+
+function setPreview(file, source = "upload") {
   if (!file) return;
   state.selectedFile = file;
-  preview.src = URL.createObjectURL(file);
-  audioName.textContent = file.name || "现场录音";
+  preview.src = makePreviewUrl(file);
+  preview.load();
+  const label = source === "capture" ? "手机录音" : source === "live" ? "网页录音" : "已选择音频";
+  audioName.textContent = file.name || label;
   audioMeta.textContent = `${formatSize(file.size)} · 已准备生成`;
   audioChip.hidden = false;
-  recordState.textContent = "音频已就绪";
+  recordState.textContent = `${label}已就绪，可以生成方言复刻语音`;
   serviceState.textContent = "Audio ready";
+  liveLabel.textContent = "Ready";
   waveWrap.classList.add("has-audio");
 }
 
-function setSelectedAudio(file, source = "upload") {
-  if (!file) return;
-  setPreview(file);
-  if (source === "capture") {
-    audioName.textContent = file.name || "手机录音";
-    recordState.textContent = "手机录音已就绪";
-  }
+function setInputFiles(file) {
+  if (!file || !window.DataTransfer) return;
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  fileInput.files = transfer.files;
 }
 
 function clearAudio() {
   fileInput.value = "";
   recordInput.value = "";
   state.selectedFile = null;
+  if (state.selectedObjectUrl) URL.revokeObjectURL(state.selectedObjectUrl);
+  state.selectedObjectUrl = "";
   preview.removeAttribute("src");
   preview.load();
   audioChip.hidden = true;
   recordTimer.textContent = "00:00";
-  recordState.textContent = "按住乡音，从这里开始";
+  recordState.textContent = isLikelyMobile() ? "按住录音，或点加号调用手机录音器" : "点击录音，或上传一段参考音频";
   serviceState.textContent = "Ready";
-  waveWrap.classList.remove("is-recording", "has-audio");
+  liveLabel.textContent = "Live";
+  waveWrap.classList.remove("is-recording", "is-canceling", "has-audio");
   resetSteps();
 }
 
+function openNativeRecorder(reason = "") {
+  stopTimer();
+  stopDrawing();
+  drawLiveWave();
+  state.startedAt = Date.now();
+  recordTimer.textContent = "00:00";
+  recordState.textContent = "正在打开手机录音器，录完返回后会自动载入音频";
+  serviceState.textContent = "Native record";
+  liveLabel.textContent = "Phone recorder";
+  waveWrap.classList.add("is-recording");
+  state.nativeCaptureActive = true;
+  state.fallbackTimerId = window.setInterval(() => {
+    recordTimer.textContent = formatTime(Date.now() - state.startedAt);
+  }, 250);
+  const handleReturn = () => {
+    window.setTimeout(() => {
+      if (!state.nativeCaptureActive) return;
+      if (!recordInput.files || !recordInput.files[0]) {
+        state.nativeCaptureActive = false;
+        finishNativeRecorderUi();
+        recordState.textContent = "没有选择录音文件，可以重新录制";
+      }
+    }, 700);
+  };
+  window.addEventListener("focus", handleReturn, { once: true });
+  window.addEventListener("pageshow", handleReturn, { once: true });
+  if (reason) renderMessage(reason, "warn");
+  recordInput.click();
+}
+
+function finishNativeRecorderUi() {
+  if (state.fallbackTimerId) clearInterval(state.fallbackTimerId);
+  state.fallbackTimerId = null;
+  resetRecordingUi();
+}
+
 async function startRecording() {
+  if (state.recorder && state.recorder.state === "recording") return;
   if (!supportsLiveMicrophone()) {
-    openNativeRecorder("当前浏览器或 HTTP 页面不能直接访问实时麦克风。");
+    const reason = window.isSecureContext
+      ? "当前浏览器不支持网页内录音，已切换到手机系统录音器。"
+      : "当前页面不是 HTTPS，手机浏览器会禁止网页直接访问麦克风，已切换到手机系统录音器。";
+    openNativeRecorder(reason);
     return;
   }
 
   try {
-    state.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const format = getRecorderFormat();
+    state.stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
+    });
     state.chunks = [];
-    state.recorder = new MediaRecorder(state.stream);
-    state.audioContext = new AudioContext();
-    const source = state.audioContext.createMediaStreamSource(state.stream);
-    state.analyser = state.audioContext.createAnalyser();
-    state.analyser.fftSize = 2048;
-    source.connect(state.analyser);
+    state.recorder = new MediaRecorder(state.stream, format.mimeType ? { mimeType: format.mimeType } : undefined);
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      state.audioContext = new AudioContextClass();
+      const source = state.audioContext.createMediaStreamSource(state.stream);
+      state.analyser = state.audioContext.createAnalyser();
+      state.analyser.fftSize = 2048;
+      source.connect(state.analyser);
+    }
 
     state.recorder.ondataavailable = (event) => {
-      if (event.data.size) state.chunks.push(event.data);
+      if (event.data && event.data.size) state.chunks.push(event.data);
     };
     state.recorder.onstop = () => {
-      const blob = new Blob(state.chunks, { type: "audio/webm" });
-      const file = new File([blob], `live-recording-${Date.now()}.webm`, { type: "audio/webm" });
-      const transfer = new DataTransfer();
-      transfer.items.add(file);
-      fileInput.files = transfer.files;
-      setPreview(file);
+      const durationMs = Date.now() - state.startedAt;
+      const chunks = [...state.chunks];
+      const mimeType = state.recorder?.mimeType || format.mimeType || "audio/webm";
+      const ext = format.ext || (mimeType.includes("mp4") ? "m4a" : "webm");
       stopRecordingDevices();
+      if (state.cancelOnStop) {
+        state.cancelOnStop = false;
+        recordState.textContent = "录音已取消";
+        return;
+      }
+      if (!chunks.length || durationMs < 800) {
+        renderMessage("录音时间太短，请录制 8-20 秒，环境安静、单人说话效果最好。", "warn");
+        recordState.textContent = "录音太短，请重新录制";
+        return;
+      }
+      const blob = new Blob(chunks, { type: mimeType });
+      const file = new File([blob], `live-recording-${Date.now()}.${ext}`, { type: mimeType || "audio/webm" });
+      setInputFiles(file);
+      setPreview(file, "live");
     };
 
-    stopDrawing();
-    drawLiveWave();
-    startTimer();
-    state.recorder.start();
-    recordBtn.disabled = true;
-    stopBtn.disabled = false;
-    waveWrap.classList.add("is-recording");
-    recordState.textContent = "正在录制你的声音";
-    serviceState.textContent = "Recording";
+    setRecordingUi("正在录音，松开发送，上滑取消");
+    state.recorder.start(500);
   } catch (error) {
-    const message = error && error.name === "NotAllowedError"
-      ? "麦克风权限被拒绝。"
-      : `无法启动麦克风：${error.message || "浏览器未开放录音能力"}。`;
+    stopRecordingDevices();
+    const message =
+      error && error.name === "NotAllowedError"
+        ? "麦克风权限被拒绝。请在浏览器权限里允许录音，或使用手机系统录音器上传。"
+        : `无法启动麦克风：${error.message || "浏览器未开放录音能力"}。已切换到手机系统录音器。`;
     openNativeRecorder(message);
   }
 }
@@ -260,22 +382,20 @@ function stopRecordingDevices() {
   state.stream = null;
   state.audioContext = null;
   state.analyser = null;
+  state.recorder = null;
   recordBtn.disabled = false;
   stopBtn.disabled = true;
-  waveWrap.classList.remove("is-recording");
+  waveWrap.classList.remove("is-recording", "is-canceling");
   drawIdleWave();
 }
 
-function stopRecording() {
+function stopRecording({ cancel = false } = {}) {
+  state.cancelOnStop = cancel;
   if (state.recorder && state.recorder.state !== "inactive") {
     state.recorder.stop();
   } else {
     stopRecordingDevices();
   }
-}
-
-function renderMessage(message, level = "empty") {
-  result.innerHTML = `<div class="${level === "warn" ? "warn-card" : "empty-state"}"><p>${escapeHtml(message)}</p></div>`;
 }
 
 function renderAudioBlock(title, url, tone, autoPlay = false) {
@@ -314,7 +434,7 @@ function renderResult(data) {
       </article>
       ${
         data.emotion_label || data.prosody_instruction
-          ? `<article><span>情绪语调</span><p>${escapeHtml([data.emotion_label, data.prosody_instruction].filter(Boolean).join("："))}</p></article>`
+          ? `<article><span>情绪语调</span><p>${escapeHtml([data.emotion_label, data.prosody_instruction].filter(Boolean).join("；"))}</p></article>`
           : ""
       }
       <article>
@@ -333,23 +453,68 @@ function renderResult(data) {
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
-  if (file) setSelectedAudio(file, "upload");
+  if (file) setPreview(file, "upload");
 });
 
 recordInput.addEventListener("change", () => {
+  state.nativeCaptureActive = false;
+  finishNativeRecorderUi();
   const file = recordInput.files[0];
-  if (file) setSelectedAudio(file, "capture");
+  if (file) {
+    setPreview(file, "capture");
+  } else {
+    recordState.textContent = "没有选择录音文件，可以重新录制";
+  }
 });
 
-recordBtn.addEventListener("click", startRecording);
-stopBtn.addEventListener("click", stopRecording);
+recordBtn.addEventListener("click", () => {
+  if (state.ignoreNextClick) {
+    state.ignoreNextClick = false;
+    return;
+  }
+  if (state.recorder && state.recorder.state === "recording") stopRecording();
+  else startRecording();
+});
+stopBtn.addEventListener("click", () => stopRecording());
 clearBtn.addEventListener("click", clearAudio);
+
+recordBtn.addEventListener("pointerdown", (event) => {
+  if (!isLikelyMobile() || event.pointerType === "mouse" || !supportsLiveMicrophone()) return;
+  event.preventDefault();
+  state.pointerRecording = true;
+  state.ignoreNextClick = true;
+  state.pointerStartY = event.clientY;
+  state.cancelOnStop = false;
+  recordBtn.setPointerCapture(event.pointerId);
+  startRecording();
+});
+
+recordBtn.addEventListener("pointermove", (event) => {
+  if (!state.pointerRecording) return;
+  const canceling = state.pointerStartY - event.clientY > 72;
+  waveWrap.classList.toggle("is-canceling", canceling);
+  recordState.textContent = canceling ? "松手取消本次录音" : "正在录音，松开发送，上滑取消";
+  state.cancelOnStop = canceling;
+});
+
+recordBtn.addEventListener("pointerup", (event) => {
+  if (!state.pointerRecording) return;
+  event.preventDefault();
+  state.pointerRecording = false;
+  stopRecording({ cancel: state.cancelOnStop });
+});
+
+recordBtn.addEventListener("pointercancel", () => {
+  if (!state.pointerRecording) return;
+  state.pointerRecording = false;
+  stopRecording({ cancel: true });
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const selectedAudio = state.selectedFile || fileInput.files[0] || recordInput.files[0];
   if (!selectedAudio) {
-    renderMessage("请先录音或点击加号上传一段音频。", "warn");
+    renderMessage("请先录音，或点击加号上传一段音频。", "warn");
     return;
   }
 
@@ -370,7 +535,7 @@ form.addEventListener("submit", async (event) => {
     const selectedDialect = form.querySelector('input[name="dialect"]:checked')?.value || "cantonese";
     const body = new FormData();
     body.append("dialect", selectedDialect);
-    body.append("audio", selectedAudio);
+    body.append("audio", selectedAudio, selectedAudio.name || `recording-${Date.now()}.m4a`);
     const response = await fetch("/api/convert", { method: "POST", body });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "请求失败");
@@ -388,4 +553,6 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+clearAudio();
+stopDrawing();
 drawIdleWave();

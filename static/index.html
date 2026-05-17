@@ -12,7 +12,7 @@
       <section class="stage" aria-labelledby="appTitle">
         <header class="topbar">
           <div class="brand">
-            <span class="brand-mark" aria-hidden="true">▮</span>
+            <span class="brand-mark" aria-hidden="true">声</span>
             <div>
               <p class="eyebrow">AI 方言音色复刻</p>
               <h1 id="appTitle">声临其境</h1>
@@ -25,7 +25,7 @@
           <section class="live-card" aria-label="录音工作台">
             <div class="live-head">
               <div class="live-title">
-                <span class="live-icon" aria-hidden="true">▮▮</span>
+                <span class="live-icon" aria-hidden="true">●</span>
                 <span id="liveLabel">Live</span>
               </div>
               <button class="icon-button ghost" id="clearBtn" type="button" title="清空音频" aria-label="清空音频">
@@ -37,7 +37,7 @@
               <canvas id="waveCanvas" width="720" height="420" aria-hidden="true"></canvas>
               <div class="wave-copy">
                 <p id="recordTimer">00:00</p>
-                <span id="recordState">按住乡音，从这里开始</span>
+                <span id="recordState">点击录音，或上传一段参考音频</span>
               </div>
             </div>
 
@@ -68,8 +68,8 @@
               </button>
             </div>
 
-            <input id="audioInput" name="audio" type="file" accept="audio/*" />
-            <input id="recordInput" type="file" accept="audio/*" capture="microphone" />
+            <input id="audioInput" name="audio" type="file" accept="audio/*,.m4a,.mp4,.3gp,.3gpp,.caf,.amr" />
+            <input id="recordInput" type="file" accept="audio/*,.m4a,.mp4,.3gp,.3gpp,.caf,.amr" capture="microphone" />
             <div class="audio-chip" id="audioChip" hidden>
               <div>
                 <strong id="audioName">已选择音频</strong>
@@ -113,7 +113,7 @@
       <section class="result-panel" id="result" aria-live="polite">
         <div class="empty-state">
           <p>生成结果会出现在这里。</p>
-          <span>推荐录制 10-20 秒，环境安静，单人说话，音色复刻会更稳。</span>
+          <span>推荐录制 10-20 秒，环境安静、单人说话，音色复刻会更稳定。</span>
         </div>
       </section>
     </main>

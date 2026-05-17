@@ -13,7 +13,7 @@ from fastapi import UploadFile
 from .config import settings
 
 
-ALLOWED_AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".webm", ".flac", ".amr"}
+ALLOWED_AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".webm", ".flac", ".amr", ".mp4", ".3gp", ".3gpp", ".caf"}
 
 
 def ensure_dirs() -> None:
@@ -41,6 +41,12 @@ def safe_ext(filename: str | None, content_type: str | None = None) -> str:
             return ".ogg"
         if "mp4" in content_type or "m4a" in content_type:
             return ".m4a"
+        if "3gpp" in content_type or "3gp" in content_type:
+            return ".3gp"
+        if "caf" in content_type or "x-caf" in content_type:
+            return ".caf"
+        if "quicktime" in content_type:
+            return ".mp4"
     return ".wav"
 
 

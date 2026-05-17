@@ -12,6 +12,9 @@ def test_safe_ext_keeps_common_audio_suffixes():
 def test_safe_ext_falls_back_from_content_type():
     assert safe_ext("recording", "audio/ogg") == ".ogg"
     assert safe_ext(None, "audio/wav") == ".wav"
+    assert safe_ext("ios-recording", "audio/mp4") == ".m4a"
+    assert safe_ext("android-recording", "audio/3gpp") == ".3gp"
+    assert safe_ext("voice", "audio/x-caf") == ".caf"
 
 
 def test_safe_ext_rejects_unknown_suffix_to_wav():
