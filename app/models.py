@@ -14,6 +14,8 @@ class ConversionResult(BaseModel):
     source_text: str
     dialect_text: str
     pronunciation_note: str = ""
+    emotion_label: str = ""
+    prosody_instruction: str = ""
     gold_audio_url: str | None = None
     voice_matched_audio_url: str | None = None
     recommended_audio_url: str | None = None
@@ -26,4 +28,3 @@ class HealthResult(BaseModel):
     ok: bool
     app: str
     configured: dict[str, bool]
-

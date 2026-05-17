@@ -309,6 +309,11 @@ function renderResult(data) {
         <span>原始识别</span>
         <p>${escapeHtml(data.source_text || "暂无文本")}</p>
       </article>
+      ${
+        data.emotion_label || data.prosody_instruction
+          ? `<article><span>情绪语调</span><p>${escapeHtml([data.emotion_label, data.prosody_instruction].filter(Boolean).join("："))}</p></article>`
+          : ""
+      }
       <article>
         <span>方言表达</span>
         <p>${escapeHtml(data.dialect_text || "暂无文本")}</p>

@@ -4,7 +4,14 @@ from pathlib import Path
 
 from .config import settings
 from .models import ConversionResult
-from .providers import ProviderError, enroll_voice, rewrite_to_dialect, synthesize, transcribe_audio
+from .providers import (
+    ProviderError,
+    analyze_expression,
+    enroll_voice,
+    rewrite_to_dialect,
+    synthesize,
+    transcribe_audio,
+)
 from .storage import (
     cleanup_runtime,
     local_output_path,
@@ -33,12 +40,24 @@ DIALECT_TTS_CONTROLS = {
 }
 
 
+def build_tts_instruction(dialect: str, prosody_instruction: str) -> str:
+    """Keep CosyVoice instruction short enough for dialect plus emotion control."""
+    base = DIALECT_TTS_CONTROLS[dialect]["instruction"].rstrip("。")
+    prosody = (prosody_instruction or "自然口语，有轻微起伏").strip("。；; ")
+    instruction = f"{base}，{prosody}。"
+    if len(instruction) <= 95:
+        return instruction
+    return f"{base}，自然口语，有情绪起伏。"
+
+
 def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResult:
     cleanup_runtime()
     warnings: list[str] = []
 
-    source_text = transcribe_audio(audio_path)
-    rewritten = rewrite_to_dialect(source_text, dialect)
+    raw_source_text = transcribe_audio(audio_path)
+    expression = analyze_expression(raw_source_text)
+    source_text = expression["display_text"]
+    rewritten = rewrite_to_dialect(source_text, dialect, expression)
     dialect_text = rewritten["dialect_text"]
     tts_control = DIALECT_TTS_CONTROLS[dialect]
     # Bind both content and pronunciation: the rewritten text carries dialect
@@ -46,6 +65,7 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
     # This avoids the old failure mode where dialect text was read with
     # Mandarin pronunciation, or Mandarin text was only weakly re-expressed.
     synthesis_text = dialect_text
+    tts_instruction = build_tts_instruction(dialect, expression["prosody_instruction"])
 
     gold_audio_url = None
     voice_matched_audio_url = None
@@ -57,7 +77,7 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
             local_output_path(job_id, "gold"),
             voice=settings.qwen_tts_voice,
             model=settings.qwen_tts_model,
-            instruction=tts_control["instruction"],
+            instruction=tts_instruction,
             language_hint=tts_control["language_hint"],
         )
     except ProviderError as exc:
@@ -82,7 +102,7 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
             local_output_path(job_id, "voice_matched"),
             voice=voice_id,
             model=settings.qwen_voice_target_model,
-            instruction=tts_control["instruction"],
+            instruction=tts_instruction,
             language_hint=tts_control["language_hint"],
         )
     except ProviderError as exc:
@@ -96,6 +116,8 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
         source_text=source_text,
         dialect_text=dialect_text,
         pronunciation_note=rewritten.get("pronunciation_note", ""),
+        emotion_label=expression.get("emotion_label", ""),
+        prosody_instruction=expression.get("prosody_instruction", ""),
         gold_audio_url=gold_audio_url,
         voice_matched_audio_url=voice_matched_audio_url,
         recommended_audio_url=recommended,

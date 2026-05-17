@@ -277,7 +277,111 @@ def _extract_text(data: Any) -> str:
     return ""
 
 
-def rewrite_to_dialect(source_text: str, dialect: str) -> dict[str, str]:
+def analyze_expression(source_text: str) -> dict[str, str]:
+    """Restore punctuation and derive a compact emotion/prosody cue for TTS."""
+    clean_text = " ".join(source_text.split()).strip()
+    if not clean_text:
+        return {
+            "display_text": "",
+            "emotion_label": "自然",
+            "prosody_instruction": "自然口语，有轻微起伏",
+        }
+
+    fallback_label = _heuristic_emotion_label(clean_text)
+    fallback = {
+        "display_text": _ensure_sentence_punctuation(clean_text, fallback_label),
+        "emotion_label": fallback_label,
+        "prosody_instruction": _prosody_for_emotion(fallback_label),
+    }
+    if settings.enable_mock_when_no_key and not settings.qwen_llm_api_key:
+        return fallback
+
+    url = f"{settings.qwen_llm_base_url.rstrip('/')}/chat/completions"
+    prompt = f"""
+你是中文口语转写整理与语音情感标注专家。请只根据用户原文恢复适合朗读的标点，并判断说话情绪。
+要求：
+1. 不改写事实，不扩写内容。
+2. display_text 必须是带标点的原意文本。
+3. emotion_label 用 2-6 个汉字，例如：自然、开心、焦急、惊讶、委屈、严肃、害怕。
+4. prosody_instruction 用 8-18 个汉字，描述 TTS 语气节奏，例如：语气焦急，尾音略上扬。
+5. 返回 JSON：{{"display_text":"...","emotion_label":"...","prosody_instruction":"..."}}。
+
+用户原文：{clean_text}
+""".strip()
+    payload = {
+        "model": settings.qwen_llm_model,
+        "messages": [
+            {"role": "system", "content": "你只输出合法 JSON，不输出 Markdown。"},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+    }
+    try:
+        data = _request_json("POST", url, headers=_headers(settings.qwen_llm_api_key), payload=payload)
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        parsed = json.loads(content)
+    except (ProviderError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        fallback["prosody_instruction"] = f'{fallback["prosody_instruction"]}；情感分析回退'
+        return fallback
+
+    display_text = str(parsed.get("display_text") or fallback["display_text"]).strip()
+    emotion_label = _short_text(parsed.get("emotion_label"), fallback_label, 8)
+    prosody_instruction = _short_text(
+        parsed.get("prosody_instruction"),
+        _prosody_for_emotion(emotion_label),
+        22,
+    )
+    return {
+        "display_text": _ensure_sentence_punctuation(display_text, emotion_label),
+        "emotion_label": emotion_label,
+        "prosody_instruction": prosody_instruction,
+    }
+
+
+def _short_text(value: Any, default: str, max_chars: int) -> str:
+    text = str(value or default).strip()
+    return text[:max_chars] if len(text) > max_chars else text
+
+
+def _heuristic_emotion_label(text: str) -> str:
+    if any(word in text for word in ("吓", "恐怖", "害怕", "怕", "糟了", "完了")):
+        return "紧张"
+    if any(word in text for word in ("好大", "特别", "太", "真的", "居然")) or "!" in text or "！" in text:
+        return "惊讶"
+    if any(word in text for word in ("开心", "高兴", "喜欢", "太好了", "哈哈")):
+        return "开心"
+    if any(word in text for word in ("急", "赶", "快点", "马上", "等一下")):
+        return "焦急"
+    if any(word in text for word in ("难过", "委屈", "失望", "唉")):
+        return "委屈"
+    return "自然"
+
+
+def _prosody_for_emotion(emotion_label: str) -> str:
+    mapping = {
+        "开心": "语气明亮，节奏轻快",
+        "惊讶": "语气夸张，尾音上扬",
+        "紧张": "语气紧张，节奏稍快",
+        "焦急": "语气焦急，停顿更短",
+        "委屈": "语气低落，尾音放轻",
+        "严肃": "语气沉稳，停顿清晰",
+        "害怕": "语气发紧，音量略低",
+    }
+    return mapping.get(emotion_label, "自然口语，有轻微起伏")
+
+
+def _ensure_sentence_punctuation(text: str, emotion_label: str) -> str:
+    text = text.strip()
+    if not text:
+        return text
+    if text[-1] in "。！？!?":
+        return text
+    if emotion_label in {"惊讶", "开心", "紧张", "焦急"}:
+        return f"{text}！"
+    return f"{text}。"
+
+
+def rewrite_to_dialect(source_text: str, dialect: str, expression: dict[str, str] | None = None) -> dict[str, str]:
     dialect_names = {
         "cantonese": "粤语/广东话",
         "sichuanese": "四川话/川渝口语",
@@ -292,15 +396,22 @@ def rewrite_to_dialect(source_text: str, dialect: str) -> dict[str, str]:
         return {"dialect_text": demo[dialect], "pronunciation_note": "离线演示文本，真实部署会由 Qwen LLM 生成。"}
 
     url = f"{settings.qwen_llm_base_url.rstrip('/')}/chat/completions"
+    emotion_note = ""
+    if expression:
+        emotion_note = (
+            f"\n原句情绪：{expression.get('emotion_label', '自然')}。"
+            f"\n朗读语调：{expression.get('prosody_instruction', '自然口语，有轻微起伏')}。"
+        )
     prompt = f"""
 你是中国方言口语化改写专家。把用户文本改写为自然、可朗读、适合 TTS 的{dialect_names[dialect]}。
 要求：
 1. 保留原意，不扩写事实。
 2. 输出必须像本地人自然讲话，不要只是普通话换几个词。
-3. 避免生僻字堆砌，必要时使用常见汉字表达方言语气。
-4. 返回 JSON：{{"dialect_text": "...", "pronunciation_note": "简短说明"}}。
+3. 保留原句标点承载的停顿、惊讶、焦急、开心或低落等情绪。
+4. 避免生僻字堆砌，必要时使用常见汉字表达方言语气。
+5. 返回 JSON：{{"dialect_text": "...", "pronunciation_note": "简短说明"}}。
 
-用户文本：{source_text}
+用户文本：{source_text}{emotion_note}
 """.strip()
     payload = {
         "model": settings.qwen_llm_model,

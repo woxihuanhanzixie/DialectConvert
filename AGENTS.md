@@ -2,46 +2,56 @@
 
 ## 项目定位
 
-本仓库是“声临其境: AI 赋能的中国濒危方言数字化保护与传承平台”的归档重建版。当前交付目标是一个可在小型腾讯云服务器运行的 Web 应用：用户用手机录音或上传音频，系统转写原始语音，将语义改写为粤语、四川话或闽南话，再用云端音色克隆能力生成“用户音色说方言”的结果。
+“声临其境”是一个方言音色复刻 Web 应用。用户在手机或电脑上传/录制一段参考语音，系统完成 ASR 转写、方言口语化改写、音色情感分析、CosyVoice 音色注册与方言语音合成，最终输出带有用户音色的粤语、四川话或闽南话语音。
 
 ## 当前结构
 
-- `app/`: FastAPI 后端主代码。
-- `app/main.py`: HTTP 入口、静态页面、上传接口、健康检查。
-- `app/pipeline.py`: ASR、方言改写、音色注册、TTS/VC 合成的编排层。
-- `app/providers.py`: DashScope/Qwen API 调用封装，含重试、错误处理和音频提取。
-- `app/storage.py`: 上传命名、输出文件、音色缓存、临时文件清理。
-- `app/config.py`: `.env` 配置读取，不打印任何密钥。
-- `static/`: 手机端友好的单页 Web 前端。
-- `scripts/run_dev.ps1`: 本地开发启动脚本。
-- `scripts/deploy_tencent_cloud.ps1`: 腾讯云部署脚本，使用本地 SSH 私钥上传并创建 systemd 服务。
-- `tests/`: 本地单元测试，覆盖上传文件处理和主编排偏好克隆音色结果的行为。
-- `docs/`: 原项目文档与本次执行记录。
-- `runtime_data/`: 运行时上传、输出和音色缓存目录，不应提交 Git。
+- `app/`: FastAPI 后端。
+- `app/main.py`: HTTP 入口，提供首页、健康检查和 `/api/convert`。
+- `app/models.py`: API 响应模型，包含识别文本、方言文本、情绪标签、语调提示和音频 URL。
+- `app/pipeline.py`: 主链路编排，顺序为清理缓存、ASR、情感/标点分析、方言改写、音色注册、TTS 合成。
+- `app/providers.py`: DashScope/Qwen/CosyVoice API 调用，包含 ASR、LLM 改写、情感标注、音色注册和语音合成。
+- `app/storage.py`: 上传文件、输出文件、元数据、音色缓存和运行时清理。
+- `static/`: 单页前端，保留原有录音/上传/提交逻辑，结果区展示带标点识别文本、情绪语调、方言文本和音频。
+- `scripts/deploy_tencent_cloud_tar.sh`: 推荐部署脚本，在 WSL/Ubuntu 或 Linux 中用 tar + ssh 部署到腾讯云。
+- `scripts/deploy_tencent_cloud.ps1`: PowerShell 备用脚本，不作为首选部署方式。
+- `tests/`: 单元测试，覆盖主链路、缓存清理、TTS 指令拼接等关键行为。
+- `docs/`: 项目计划、执行记录和技术文档。
+- `runtime_data/`: 本地/服务器运行时数据目录，已被 `.gitignore` 排除。
 
-## 主链路
+## 语音链路
 
-1. 前端录音或上传音频。
-2. 后端保存到 `runtime_data/uploads/{job_id}.{ext}`。
-3. ASR 使用 DashScope Paraformer 生成 `source_text`。
-4. Qwen LLM 将 `source_text` 改写成自然方言口语文本。
-5. Qwen Voice Enrollment 复用或创建 `voice_id`。
-6. Qwen TTS/VC 使用同一个 `target_model` 生成克隆音色方言语音。
-7. 若克隆失败，返回 Gold Teacher 标准方言音频并显示明确警告，不伪装成克隆成功。
+1. 前端提交 `audio` 和 `dialect`。
+2. 后端保存上传文件到 `runtime_data/uploads/{job_id}.{ext}`。
+3. `transcribe_audio` 调用 DashScope Paraformer 得到原始 ASR 文本。
+4. `analyze_expression` 用 Qwen LLM 恢复标点，并生成 `emotion_label` 与短 `prosody_instruction`。
+5. `rewrite_to_dialect` 用带标点文本和情绪提示生成自然方言文本。
+6. `build_tts_instruction` 将官方方言指令与短情绪语调合并，例如“请用广东话表达，语气夸张，尾音上扬。”。
+7. `enroll_voice` 注册或复用音色缓存。
+8. `synthesize` 使用 CosyVoice 复刻音色生成方言语音。
+9. 前端展示 `source_text`、`emotion_label`、`prosody_instruction`、`dialect_text` 和音频。
 
-## 关键配置
+## 部署约定
 
-- `DASHSCOPE_API_KEY`: DashScope/Qwen 语音能力密钥。
-- `QWEN_LLM_API_KEY`: Qwen/OpenAI-compatible LLM 密钥，缺省可复用 `DASHSCOPE_API_KEY`。
-- `PUBLIC_BASE_URL`: 部署后的公网地址，例如 `http://服务器IP:7860`。云端 ASR/音色注册需要能拉取上传音频。
-- `QWEN_VOICE_ENROLLMENT_MODEL`: 默认 `qwen-voice-enrollment`。
-- `QWEN_VOICE_TARGET_MODEL`: 默认 `qwen3-tts-vc-2026-01-22`。
-- `QWEN_TTS_MODEL`: Gold Teacher 标准 TTS 模型。
-- `QWEN_TTS_VOICE`: Gold Teacher 默认声音。
+优先使用 WSL/Ubuntu 或 Linux 执行部署，避免 PowerShell 在中文路径、ZIP 打包、UTF-8、远端 Linux 文件名上的不稳定问题。
+
+推荐命令：
+
+```bash
+cd /mnt/d/dialect\ convert
+bash scripts/deploy_tencent_cloud_tar.sh 43.139.53.84 root /opt/dialect-convert 7860 http://43.139.53.84
+```
+
+部署后检查：
+
+```bash
+curl -s http://43.139.53.84/health
+ssh -i ~/.ssh/dialectconvert_key.pem root@43.139.53.84 "systemctl is-active dialect-convert"
+```
 
 ## 安全约束
 
-- 不提交 `.env`、私钥、运行时音频或缓存文件。
-- 不在日志或文档中输出 API key、SSH 私钥内容或用户上传音频的敏感信息。
-- 运行时文件默认按 `CLEANUP_AFTER_HOURS` 清理，避免 50G 服务器被上传文件占满。
-
+- 不提交 `.env`、私钥、API key、上传音频、输出音频和运行缓存。
+- 不在日志、文档或提交信息中暴露密钥内容。
+- 50G 服务器必须依赖 `cleanup_runtime`、`CLEANUP_AFTER_HOURS` 和音色缓存 TTL 控制磁盘增长。
+- CosyVoice `instruction` 保持短句，避免超长指令影响方言输出或触发接口限制。

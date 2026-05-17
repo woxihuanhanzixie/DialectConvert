@@ -15,8 +15,17 @@ def test_convert_audio_prefers_voice_matched(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline, "transcribe_audio", lambda path: source_text)
     monkeypatch.setattr(
         pipeline,
+        "analyze_expression",
+        lambda text: {
+            "display_text": f"{text}\uff01",
+            "emotion_label": "\u60ca\u8bb6",
+            "prosody_instruction": "\u8bed\u6c14\u5938\u5f20\uff0c\u5c3e\u97f3\u4e0a\u626c",
+        },
+    )
+    monkeypatch.setattr(
+        pipeline,
         "rewrite_to_dialect",
-        lambda text, dialect: {
+        lambda text, dialect, expression=None: {
             "dialect_text": dialect_text,
             "pronunciation_note": "\u81ea\u7136\u5ddd\u6e1d\u53e3\u8bed",
         },
@@ -40,11 +49,26 @@ def test_convert_audio_prefers_voice_matched(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline, "synthesize", fake_synth)
     result = pipeline.convert_audio("job", audio, "sichuanese")
 
-    assert result.source_text == source_text
+    assert result.source_text == f"{source_text}\uff01"
     assert result.dialect_text == dialect_text
+    assert result.emotion_label == "\u60ca\u8bb6"
+    assert result.prosody_instruction == "\u8bed\u6c14\u5938\u5f20\uff0c\u5c3e\u97f3\u4e0a\u626c"
     assert result.voice_id == "voice-1"
     assert result.recommended_audio_url == result.voice_matched_audio_url
     assert synth_calls
     assert {call["text"] for call in synth_calls} == {dialect_text}
-    assert {call["instruction"] for call in synth_calls} == {"\u8bf7\u7528\u56db\u5ddd\u8bdd\u8868\u8fbe\u3002"}
+    assert {call["instruction"] for call in synth_calls} == {
+        "\u8bf7\u7528\u56db\u5ddd\u8bdd\u8868\u8fbe\uff0c\u8bed\u6c14\u5938\u5f20\uff0c\u5c3e\u97f3\u4e0a\u626c\u3002"
+    }
     assert {call["language_hint"] for call in synth_calls} == {"zh"}
+
+
+def test_build_tts_instruction_keeps_dialect_and_caps_length():
+    instruction = pipeline.build_tts_instruction(
+        "cantonese",
+        "\u8bed\u6c14\u7126\u6025\uff0c\u505c\u987f\u66f4\u77ed\uff0c\u5c3e\u97f3\u7565\u4e0a\u626c",
+    )
+
+    assert instruction.startswith("\u8bf7\u7528\u5e7f\u4e1c\u8bdd\u8868\u8fbe")
+    assert "\u8bed\u6c14\u7126\u6025" in instruction
+    assert len(instruction) <= 95
