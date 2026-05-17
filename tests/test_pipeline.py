@@ -72,3 +72,42 @@ def test_build_tts_instruction_keeps_dialect_and_caps_length():
     assert instruction.startswith("\u8bf7\u7528\u5e7f\u4e1c\u8bdd\u8868\u8fbe")
     assert "\u8bed\u6c14\u7126\u6025" in instruction
     assert len(instruction) <= 95
+
+
+def test_convert_audio_translates_audio_short_warning(monkeypatch, tmp_path):
+    audio = tmp_path / "ref.wav"
+    audio.write_bytes(b"fake-audio")
+
+    monkeypatch.setattr(pipeline, "cleanup_runtime", lambda: 0)
+    monkeypatch.setattr(pipeline, "transcribe_audio", lambda path: "\u4f60\u597d")
+    monkeypatch.setattr(
+        pipeline,
+        "analyze_expression",
+        lambda text: {
+            "display_text": "\u4f60\u597d\u3002",
+            "emotion_label": "\u81ea\u7136",
+            "prosody_instruction": "\u81ea\u7136\u53e3\u8bed",
+        },
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "rewrite_to_dialect",
+        lambda text, dialect, expression=None: {"dialect_text": "\u4f60\u597d\u3002", "pronunciation_note": ""},
+    )
+    monkeypatch.setattr(pipeline, "voice_cache_key", lambda path, model: "cache")
+    monkeypatch.setattr(pipeline, "read_voice_cache", lambda key: None)
+    monkeypatch.setattr(pipeline, "enroll_voice", lambda path: "voice-1")
+    monkeypatch.setattr(pipeline, "settings", type("Settings", (), {**pipeline.settings.__dict__, "ref_audio_min_s": 8})())
+
+    def fake_synth(text, output_path, *, voice, model=None, instruction=None, language_hint="zh"):
+        if voice == "voice-1":
+            raise pipeline.ProviderError('HTTP 400: {"code":"Audio.AudioShortError","message":"audio too short!"}')
+        return f"/media/{output_path.name}-{voice}.mp3"
+
+    monkeypatch.setattr(pipeline, "synthesize", fake_synth)
+
+    result = pipeline.convert_audio("job", audio, "cantonese")
+
+    assert result.gold_audio_url
+    assert not result.voice_matched_audio_url
+    assert result.warnings == ["Voice Matched \u514b\u9686\u97f3\u8272\u5931\u8d25\uff1a\u8bf7\u8f93\u5165\u5927\u4e8e 8s \u7684\u97f3\u9891"]

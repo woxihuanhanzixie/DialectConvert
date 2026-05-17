@@ -83,8 +83,8 @@ class Settings:
     request_timeout_s: int = _int_env("API_REQUEST_TIMEOUT_S", 90)
     max_retries: int = _int_env("API_MAX_RETRIES", 3)
 
-    ref_audio_min_s: int = _int_env("SPEAKER_REF_AUDIO_MIN_S", 8)
-    ref_audio_max_s: int = _int_env("SPEAKER_REF_AUDIO_MAX_S", 40)
+    ref_audio_min_s: int = _int_env("SPEAKER_REF_AUDIO_MIN_S", 10)
+    ref_audio_max_s: int = _int_env("SPEAKER_REF_AUDIO_MAX_S", 20)
 
     enable_mock_when_no_key: bool = _env("ENABLE_MOCK_WHEN_NO_KEY", "0") == "1"
 

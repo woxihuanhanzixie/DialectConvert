@@ -316,8 +316,10 @@ h1 {
 }
 
 .audio-chip {
+  position: relative;
   display: grid;
   gap: 10px;
+  grid-template-columns: 1fr auto;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -333,6 +335,23 @@ h1 {
   margin-top: 3px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.chip-delete {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(239, 68, 68, 0.36);
+  border-radius: 50%;
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.16);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.audio-chip audio {
+  grid-column: 1 / -1;
 }
 
 audio {

@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
+from .audio_utils import ensure_reference_audio_duration
 from .config import ROOT_DIR, settings
 from .models import HealthResult
 from .pipeline import convert_audio
@@ -50,6 +51,14 @@ def health() -> HealthResult:
     )
 
 
+@app.get("/api/audio-limits")
+def audio_limits() -> dict[str, int]:
+    return {
+        "min_seconds": settings.ref_audio_min_s,
+        "max_seconds": settings.ref_audio_max_s,
+    }
+
+
 def _is_supported_upload(upload: UploadFile) -> bool:
     suffix = Path(upload.filename or "").suffix.lower()
     if suffix in ALLOWED_AUDIO_EXTS:
@@ -70,12 +79,14 @@ async def convert(
     job_id = new_job_id()
     try:
         audio_path = await save_upload(audio, job_id)
+        duration_s = await run_in_threadpool(ensure_reference_audio_duration, audio_path)
         result = await run_in_threadpool(convert_audio, job_id, audio_path, dialect)
         update_job_metadata(
             job_id,
             {
                 "dialect": dialect,
                 "status": result.status,
+                "duration_s": round(duration_s, 3) if duration_s is not None else None,
                 "has_gold_audio": bool(result.gold_audio_url),
                 "has_voice_matched_audio": bool(result.voice_matched_audio_url),
                 "warning_count": len(result.warnings),
@@ -83,6 +94,9 @@ async def convert(
         )
         return result
     except ValueError as exc:
+        if "audio_path" in locals():
+            audio_path.unlink(missing_ok=True)
+            (settings.metadata_dir / f"{job_id}.json").unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

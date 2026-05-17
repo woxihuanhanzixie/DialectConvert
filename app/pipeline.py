@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .audio_utils import is_audio_too_short_error
 from .config import settings
 from .models import ConversionResult
 from .providers import (
@@ -106,7 +107,10 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
             language_hint=tts_control["language_hint"],
         )
     except ProviderError as exc:
-        warnings.append(f"Voice Matched cloned synthesis failed; kept Gold Teacher: {exc}")
+        if is_audio_too_short_error(exc):
+            warnings.append(f"Voice Matched 克隆音色失败：请输入大于 {settings.ref_audio_min_s}s 的音频")
+        else:
+            warnings.append(f"Voice Matched cloned synthesis failed; kept Gold Teacher: {exc}")
 
     recommended = voice_matched_audio_url or gold_audio_url
     status = "ok" if recommended else "failed"
