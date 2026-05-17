@@ -292,7 +292,10 @@ function renderAudioBlock(title, url, tone, autoPlay = false) {
 }
 
 function renderResult(data) {
-  const warnings = (data.warnings || []).map((item) => `<div class="warn-card">${escapeHtml(item)}</div>`).join("");
+  const visibleWarnings = (data.warnings || []).filter(
+    (item) => !(data.voice_matched_audio_url && String(item).includes("Gold Teacher synthesis failed"))
+  );
+  const warnings = visibleWarnings.map((item) => `<div class="warn-card">${escapeHtml(item)}</div>`).join("");
   const dialectLabel = dialectNames[data.dialect] || "方言";
   result.innerHTML = `
     <div class="result-head">
