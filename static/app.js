@@ -1,5 +1,6 @@
 const form = document.querySelector("#convertForm");
 const fileInput = document.querySelector("#audioInput");
+const recordInput = document.querySelector("#recordInput");
 const preview = document.querySelector("#preview");
 const result = document.querySelector("#result");
 const submitBtn = document.querySelector("#submitBtn");
@@ -35,6 +36,24 @@ const dialectNames = {
   sichuanese: "四川话",
   hokkien: "闽南话",
 };
+
+function supportsLiveMicrophone() {
+  return Boolean(
+    window.isSecureContext &&
+      navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === "function" &&
+      window.MediaRecorder
+  );
+}
+
+function openNativeRecorder(reason = "") {
+  recordState.textContent = "请在系统录音界面完成录制";
+  serviceState.textContent = "Native record";
+  if (reason) {
+    renderMessage(`${reason} 已切换到手机系统录音。录完后选择音频即可继续生成。`, "warn");
+  }
+  recordInput.click();
+}
 
 function formatTime(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -160,8 +179,18 @@ function setPreview(file) {
   waveWrap.classList.add("has-audio");
 }
 
+function setSelectedAudio(file, source = "upload") {
+  if (!file) return;
+  setPreview(file);
+  if (source === "capture") {
+    audioName.textContent = file.name || "手机录音";
+    recordState.textContent = "手机录音已就绪";
+  }
+}
+
 function clearAudio() {
   fileInput.value = "";
+  recordInput.value = "";
   state.selectedFile = null;
   preview.removeAttribute("src");
   preview.load();
@@ -174,6 +203,11 @@ function clearAudio() {
 }
 
 async function startRecording() {
+  if (!supportsLiveMicrophone()) {
+    openNativeRecorder("当前浏览器或 HTTP 页面不能直接访问实时麦克风。");
+    return;
+  }
+
   try {
     state.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     state.chunks = [];
@@ -207,7 +241,10 @@ async function startRecording() {
     recordState.textContent = "正在录制你的声音";
     serviceState.textContent = "Recording";
   } catch (error) {
-    renderMessage(`无法启动麦克风：${error.message}`, "warn");
+    const message = error && error.name === "NotAllowedError"
+      ? "麦克风权限被拒绝。"
+      : `无法启动麦克风：${error.message || "浏览器未开放录音能力"}。`;
+    openNativeRecorder(message);
   }
 }
 
@@ -288,7 +325,12 @@ function renderResult(data) {
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
-  if (file) setPreview(file);
+  if (file) setSelectedAudio(file, "upload");
+});
+
+recordInput.addEventListener("change", () => {
+  const file = recordInput.files[0];
+  if (file) setSelectedAudio(file, "capture");
 });
 
 recordBtn.addEventListener("click", startRecording);
@@ -297,7 +339,8 @@ clearBtn.addEventListener("click", clearAudio);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!fileInput.files.length) {
+  const selectedAudio = state.selectedFile || fileInput.files[0] || recordInput.files[0];
+  if (!selectedAudio) {
     renderMessage("请先录音或点击加号上传一段音频。", "warn");
     return;
   }
@@ -316,7 +359,10 @@ form.addEventListener("submit", async (event) => {
   }, 1800);
 
   try {
-    const body = new FormData(form);
+    const selectedDialect = form.querySelector('input[name="dialect"]:checked')?.value || "cantonese";
+    const body = new FormData();
+    body.append("dialect", selectedDialect);
+    body.append("audio", selectedAudio);
     const response = await fetch("/api/convert", { method: "POST", body });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "请求失败");

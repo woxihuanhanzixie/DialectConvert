@@ -299,7 +299,8 @@ h1 {
   background: var(--danger);
 }
 
-#audioInput {
+#audioInput,
+#recordInput {
   width: 1px;
   height: 1px;
   position: absolute;
