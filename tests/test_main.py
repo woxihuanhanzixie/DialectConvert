@@ -121,3 +121,26 @@ def test_speak_with_voice_endpoint_sanitizes_errors(monkeypatch):
 
     assert response.status_code == 502
     assert response.json() == {"detail": "服务器繁忙，请稍后再试"}
+
+
+def test_preview_audio_endpoint_returns_playable_preview(monkeypatch, tmp_path):
+    source = tmp_path / "input.amr"
+    preview = tmp_path / "preview.mp3"
+    source.write_bytes(b"fake")
+    preview.write_bytes(b"mp3")
+
+    async def fake_save_upload(upload, job_id):
+        return source
+
+    monkeypatch.setattr(main, "save_upload", fake_save_upload)
+    monkeypatch.setattr(main, "make_browser_preview_audio", lambda source_path, target_path: (preview, 12.4))
+    monkeypatch.setattr(main, "public_url_for", lambda path: f"/media/outputs/{path.name}")
+    monkeypatch.setattr(main, "update_job_metadata", lambda job_id, payload: None)
+
+    response = TestClient(app).post(
+        "/api/preview-audio",
+        files={"audio": ("demo.amr", b"fake", "audio/amr")},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"audio_url": "/media/outputs/preview.mp3", "duration_s": 12.4}

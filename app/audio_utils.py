@@ -26,6 +26,37 @@ def ensure_reference_audio_duration(path: Path) -> float | None:
     return duration
 
 
+def make_browser_preview_audio(source_path: Path, target_path: Path) -> tuple[Path, float | None]:
+    duration = audio_duration_seconds(source_path)
+    if source_path.suffix.lower() in {".mp3", ".wav", ".m4a", ".mp4", ".aac", ".ogg", ".webm"}:
+        return source_path, duration
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return source_path, duration
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(source_path),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "24000",
+        "-b:a",
+        "96k",
+        str(target_path),
+    ]
+    try:
+        proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=45)
+    except (OSError, subprocess.TimeoutExpired):
+        return source_path, duration
+    if proc.returncode != 0 or not target_path.exists() or target_path.stat().st_size == 0:
+        return source_path, duration
+    return target_path, duration or audio_duration_seconds(target_path)
+
+
 def is_audio_too_short_error(error: object) -> bool:
     text = str(error)
     needles = (

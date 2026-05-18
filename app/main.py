@@ -8,11 +8,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from .audio_utils import ensure_reference_audio_duration
+from .audio_utils import ensure_reference_audio_duration, make_browser_preview_audio
 from .config import ROOT_DIR, settings
 from .models import HealthResult
 from .pipeline import convert_audio, speak_with_registered_voice
-from .storage import ALLOWED_AUDIO_EXTS, ensure_dirs, new_job_id, save_upload, update_job_metadata
+from .storage import ALLOWED_AUDIO_EXTS, ensure_dirs, new_job_id, public_url_for, save_upload, update_job_metadata
 
 
 ensure_dirs()
@@ -104,6 +104,34 @@ async def convert(
             audio_path.unlink(missing_ok=True)
             (settings.metadata_dir / f"{job_id}.json").unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="服务器繁忙，请稍后再试") from exc
+
+
+@app.post("/api/preview-audio")
+async def preview_audio(audio: UploadFile = File(...)):
+    if not _is_supported_upload(audio):
+        raise HTTPException(status_code=400, detail="请上传音频文件")
+    job_id = new_job_id()
+    try:
+        audio_path = await save_upload(audio, f"{job_id}_preview")
+        preview_path, duration_s = await run_in_threadpool(
+            make_browser_preview_audio,
+            audio_path,
+            settings.output_dir / f"{job_id}_preview.mp3",
+        )
+        update_job_metadata(
+            f"{job_id}_preview",
+            {
+                "mode": "preview_audio",
+                "duration_s": round(duration_s, 3) if duration_s is not None else None,
+                "preview_path": preview_path.name,
+            },
+        )
+        return {
+            "audio_url": public_url_for(preview_path),
+            "duration_s": round(duration_s, 3) if duration_s is not None else None,
+        }
     except Exception as exc:
         raise HTTPException(status_code=502, detail="服务器繁忙，请稍后再试") from exc
 

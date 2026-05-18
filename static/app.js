@@ -23,6 +23,7 @@ const voiceModalClose = document.querySelector("#voiceModalClose");
 const voiceTextInput = document.querySelector("#voiceTextInput");
 const voiceSpeakBtn = document.querySelector("#voiceSpeakBtn");
 const voiceModalOutput = document.querySelector("#voiceModalOutput");
+const voiceMascot = document.querySelector("#voiceMascot");
 const DEFAULT_MIN_AUDIO_SECONDS = 10;
 const DEFAULT_MAX_AUDIO_SECONDS = 20;
 
@@ -51,6 +52,7 @@ const state = {
     maxSeconds: DEFAULT_MAX_AUDIO_SECONDS,
   },
   registeredVoice: null,
+  previewRequestId: 0,
 };
 
 const dialectNames = {
@@ -118,6 +120,19 @@ function formatSize(bytes) {
   if (!bytes) return "0 KB";
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatDisplayStamp(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${month}-${day} ${hour}:${minute}`;
+}
+
+function displayAudioName(source) {
+  const label = source === "capture" ? "手机录音" : source === "live" ? "网页录音" : "上传音频";
+  return `${formatDisplayStamp()} ${label}数据`;
 }
 
 function minAudioSeconds() {
@@ -307,6 +322,10 @@ function updateAudioMeta(file, durationS = state.selectedDurationS) {
   audioMeta.textContent = parts.join(" · ");
 }
 
+function setAudioMetaStatus(file, status) {
+  audioMeta.textContent = `${formatSize(file.size)} · ${status}`;
+}
+
 function readDurationFromAudioElement(audioEl, timeoutMs = 2600) {
   return new Promise((resolve) => {
     let settled = false;
@@ -352,10 +371,39 @@ async function readFileDuration(file, timeoutMs = 2600) {
 async function refreshPreviewDuration(file) {
   const duration = await readDurationFromAudioElement(preview);
   if (state.selectedFile !== file) return;
+  if (!Number.isFinite(duration)) {
+    await hydrateServerPreview(file);
+    return;
+  }
   state.selectedDurationS = duration;
   updateAudioMeta(file, duration);
   if (Number.isFinite(duration)) {
     recordTimer.textContent = formatTime(duration * 1000);
+  }
+}
+
+async function hydrateServerPreview(file) {
+  const requestId = ++state.previewRequestId;
+  setAudioMetaStatus(file, "正在生成可播放预览");
+  try {
+    const body = new FormData();
+    body.append("audio", file, file.name || `audio-${Date.now()}.m4a`);
+    const response = await fetch("/api/preview-audio", { method: "POST", body });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "预览生成失败");
+    if (requestId !== state.previewRequestId || state.selectedFile !== file) return;
+    if (data.audio_url) {
+      preview.src = data.audio_url;
+      preview.load();
+    }
+    const duration = Number(data.duration_s);
+    state.selectedDurationS = Number.isFinite(duration) && duration > 0 ? duration : null;
+    updateAudioMeta(file, state.selectedDurationS);
+    if (state.selectedDurationS) recordTimer.textContent = formatTime(state.selectedDurationS * 1000);
+  } catch (error) {
+    if (requestId !== state.previewRequestId || state.selectedFile !== file) return;
+    state.selectedDurationS = null;
+    setAudioMetaStatus(file, "预览不可播放，可继续生成");
   }
 }
 
@@ -366,7 +414,7 @@ function setPreview(file, source = "upload") {
   preview.src = makePreviewUrl(file);
   preview.load();
   const label = source === "capture" ? "手机录音" : source === "live" ? "网页录音" : "已选择音频";
-  audioName.textContent = file.name || label;
+  audioName.textContent = displayAudioName(source);
   updateAudioMeta(file, null);
   audioChip.hidden = false;
   recordState.textContent = `${label}已就绪，可以生成方言复刻语音`;
@@ -388,6 +436,7 @@ function clearAudio() {
   recordInput.value = "";
   state.selectedFile = null;
   state.selectedDurationS = null;
+  state.previewRequestId += 1;
   if (state.selectedObjectUrl) URL.revokeObjectURL(state.selectedObjectUrl);
   state.selectedObjectUrl = "";
   preview.removeAttribute("src");
@@ -568,6 +617,7 @@ function renderResult(data) {
           dialect: data.dialect,
         }
       : null;
+  voiceMascot.hidden = !state.registeredVoice;
   result.innerHTML = `
     <div class="result-head">
       <p>生成完成</p>
@@ -598,18 +648,8 @@ function renderResult(data) {
           : ""
       }
     </div>
-    ${
-      state.registeredVoice
-        ? `<div class="voice-continue"><strong>音色注册成功</strong><span>可以继续输入新文本，系统会先分析情绪语调，再用你的克隆音色朗读。</span><button id="openVoiceModalBtn" type="button">输入文本继续生成</button></div>`
-        : ""
-    }
     ${warnings}
   `;
-  const openVoiceModalBtn = document.querySelector("#openVoiceModalBtn");
-  if (openVoiceModalBtn) {
-    openVoiceModalBtn.addEventListener("click", openVoiceModal);
-    openVoiceModal();
-  }
 }
 
 fileInput.addEventListener("change", () => {
@@ -640,6 +680,7 @@ stopBtn.addEventListener("click", () => stopRecording());
 clearBtn.addEventListener("click", clearAudio);
 deleteAudioBtn.addEventListener("click", clearAudio);
 voiceModalClose.addEventListener("click", closeVoiceModal);
+voiceMascot.addEventListener("click", openVoiceModal);
 voiceModal.addEventListener("click", (event) => {
   if (event.target === voiceModal) closeVoiceModal();
 });

@@ -42,3 +42,14 @@ def test_audio_short_provider_error_is_detected():
     error = 'HTTP 400: {"code":"Audio.AudioShortError","message":"audio too short!"}'
 
     assert audio_utils.is_audio_too_short_error(error)
+
+
+def test_browser_preview_keeps_browser_playable_audio(tmp_path):
+    audio = tmp_path / "demo.mp3"
+    target = tmp_path / "target.mp3"
+    audio.write_bytes(b"mp3")
+
+    preview, duration = audio_utils.make_browser_preview_audio(audio, target)
+
+    assert preview == audio
+    assert duration is None
