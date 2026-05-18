@@ -137,11 +137,11 @@ h1 {
 }
 
 .live-card {
-  min-height: 680px;
+  min-height: auto;
   display: grid;
-  grid-template-rows: auto 1fr auto auto auto;
-  gap: 18px;
-  padding: 22px;
+  grid-template-rows: auto auto auto auto auto;
+  gap: 14px;
+  padding: 18px;
   overflow: hidden;
 }
 
@@ -155,7 +155,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 700;
 }
 
@@ -187,7 +187,8 @@ h1 {
   position: relative;
   width: 100%;
   min-width: 0;
-  min-height: 420px;
+  min-height: 300px;
+  aspect-ratio: 16 / 7;
   overflow: hidden;
   border: 1px solid rgba(125, 211, 252, 0.2);
   border-radius: 8px;
@@ -198,7 +199,7 @@ h1 {
   content: "";
   position: absolute;
   inset: auto 0 0;
-  height: 42%;
+  height: 58%;
   background: linear-gradient(180deg, transparent, rgba(220, 238, 255, 0.18));
   pointer-events: none;
 }
@@ -227,21 +228,21 @@ h1 {
 
 .wave-copy {
   position: absolute;
-  left: 24px;
-  bottom: 24px;
+  left: 22px;
+  bottom: 20px;
   z-index: 1;
 }
 
 .wave-copy p {
   margin: 0;
-  font-size: clamp(46px, 8vw, 84px);
+  font-size: clamp(38px, 5vw, 64px);
   line-height: 0.95;
   font-weight: 800;
 }
 
 .wave-copy span {
   display: block;
-  margin-top: 10px;
+  margin-top: 8px;
   color: rgba(255, 255, 255, 0.78);
   font-weight: 700;
 }
@@ -285,11 +286,11 @@ h1 {
 .transport {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
+  gap: 12px;
 }
 
 .round-button {
-  min-height: 76px;
+  min-height: 64px;
   display: grid;
   place-items: center;
   border-radius: 999px;
@@ -376,7 +377,7 @@ audio {
 }
 
 .action-panel {
-  min-height: 680px;
+  min-height: auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -648,13 +649,8 @@ audio {
     grid-template-columns: 1fr;
   }
 
-  .live-card,
-  .action-panel {
-    min-height: auto;
-  }
-
   .wave-wrap {
-    min-height: min(58vh, 560px);
+    min-height: 260px;
   }
 
   .action-panel {
@@ -703,16 +699,26 @@ audio {
   }
 
   .live-title {
-    font-size: 26px;
+    font-size: 22px;
   }
 
   .wave-wrap {
-    min-height: 54vh;
+    min-height: 230px;
+    aspect-ratio: 10 / 6;
   }
 
   .wave-copy {
     left: 18px;
-    bottom: 18px;
+    bottom: 16px;
+  }
+
+  .wave-copy p {
+    font-size: 48px;
+  }
+
+  .wave-copy span {
+    max-width: 260px;
+    font-size: 14px;
   }
 
   .dialect-row {
@@ -725,12 +731,12 @@ audio {
   }
 
   .round-button {
-    min-height: 62px;
-    font-size: 30px;
+    min-height: 58px;
+    font-size: 28px;
   }
 
   #recordBtn {
-    min-height: 72px;
+    min-height: 64px;
   }
 
   .primary {

@@ -168,24 +168,24 @@ function drawIdleWave() {
   state.demoPulse += 0.018;
   ctx.clearRect(0, 0, width, height);
   const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "#0e1117");
-  gradient.addColorStop(0.58, "#111827");
-  gradient.addColorStop(1, "#d8e9ff");
+  gradient.addColorStop(0, "#0b1320");
+  gradient.addColorStop(0.62, "#12324f");
+  gradient.addColorStop(1, "#8fd3ff");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
-  const glow = ctx.createRadialGradient(width * 0.62, height * 0.9, 20, width * 0.62, height * 0.9, height * 0.62);
-  glow.addColorStop(0, "rgba(218, 238, 255, 0.9)");
-  glow.addColorStop(0.34, "rgba(101, 153, 220, 0.34)");
+  const glow = ctx.createRadialGradient(width * 0.7, height * 0.92, 16, width * 0.7, height * 0.92, height * 0.78);
+  glow.addColorStop(0, "rgba(236, 253, 245, 0.78)");
+  glow.addColorStop(0.34, "rgba(125, 211, 252, 0.28)");
   glow.addColorStop(1, "rgba(101, 153, 220, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(190, 242, 255, 0.28)";
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  for (let x = 0; x <= width; x += 8) {
-    const y = height * 0.68 + Math.sin(x * 0.018 + state.demoPulse) * 10 + Math.sin(x * 0.043) * 4;
+  for (let x = 0; x <= width; x += 10) {
+    const y = height * 0.62 + Math.sin(x * 0.018 + state.demoPulse) * 8 + Math.sin(x * 0.043) * 3;
     if (x === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
