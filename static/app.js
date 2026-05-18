@@ -53,6 +53,8 @@ const state = {
   },
   registeredVoice: null,
   previewRequestId: 0,
+  mascotDrag: null,
+  mascotMoved: false,
 };
 
 const dialectNames = {
@@ -604,6 +606,71 @@ function closeVoiceModal() {
   voiceModal.hidden = true;
 }
 
+function clampMascotPosition(left, top) {
+  const rect = voiceMascot.getBoundingClientRect();
+  const padding = 8;
+  const maxLeft = Math.max(padding, window.innerWidth - rect.width - padding);
+  const maxTop = Math.max(padding, window.innerHeight - rect.height - padding);
+  return {
+    left: Math.min(Math.max(left, padding), maxLeft),
+    top: Math.min(Math.max(top, padding), maxTop),
+  };
+}
+
+function placeMascot(left, top) {
+  const next = clampMascotPosition(left, top);
+  voiceMascot.style.left = `${next.left}px`;
+  voiceMascot.style.top = `${next.top}px`;
+  voiceMascot.style.right = "auto";
+  voiceMascot.style.bottom = "auto";
+  try {
+    localStorage.setItem("voiceMascotPosition", JSON.stringify(next));
+  } catch {
+    // localStorage can be blocked in embedded browsers; dragging should still work.
+  }
+}
+
+function restoreMascotPosition() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("voiceMascotPosition") || "null");
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+      placeMascot(saved.left, saved.top);
+    }
+  } catch {
+    localStorage.removeItem("voiceMascotPosition");
+  }
+}
+
+function beginMascotDrag(event) {
+  if (!state.registeredVoice || event.button > 0) return;
+  const rect = voiceMascot.getBoundingClientRect();
+  state.mascotDrag = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    left: rect.left,
+    top: rect.top,
+  };
+  state.mascotMoved = false;
+  voiceMascot.classList.add("is-dragging");
+  voiceMascot.setPointerCapture(event.pointerId);
+}
+
+function moveMascot(event) {
+  if (!state.mascotDrag || state.mascotDrag.pointerId !== event.pointerId) return;
+  const deltaX = event.clientX - state.mascotDrag.startX;
+  const deltaY = event.clientY - state.mascotDrag.startY;
+  if (Math.hypot(deltaX, deltaY) > 6) state.mascotMoved = true;
+  placeMascot(state.mascotDrag.left + deltaX, state.mascotDrag.top + deltaY);
+}
+
+function endMascotDrag(event) {
+  if (!state.mascotDrag || state.mascotDrag.pointerId !== event.pointerId) return;
+  voiceMascot.classList.remove("is-dragging");
+  voiceMascot.releasePointerCapture(event.pointerId);
+  state.mascotDrag = null;
+}
+
 function renderResult(data) {
   const visibleWarnings = (data.warnings || []).filter(
     (item) => !(data.voice_matched_audio_url && String(item).includes("Gold Teacher synthesis failed"))
@@ -618,6 +685,7 @@ function renderResult(data) {
         }
       : null;
   voiceMascot.hidden = !state.registeredVoice;
+  if (state.registeredVoice) restoreMascotPosition();
   result.innerHTML = `
     <div class="result-head">
       <p>生成完成</p>
@@ -680,7 +748,23 @@ stopBtn.addEventListener("click", () => stopRecording());
 clearBtn.addEventListener("click", clearAudio);
 deleteAudioBtn.addEventListener("click", clearAudio);
 voiceModalClose.addEventListener("click", closeVoiceModal);
-voiceMascot.addEventListener("click", openVoiceModal);
+voiceMascot.addEventListener("pointerdown", beginMascotDrag);
+voiceMascot.addEventListener("pointermove", moveMascot);
+voiceMascot.addEventListener("pointerup", endMascotDrag);
+voiceMascot.addEventListener("pointercancel", endMascotDrag);
+voiceMascot.addEventListener("click", (event) => {
+  if (state.mascotMoved) {
+    event.preventDefault();
+    state.mascotMoved = false;
+    return;
+  }
+  openVoiceModal();
+});
+window.addEventListener("resize", () => {
+  if (voiceMascot.hidden) return;
+  const rect = voiceMascot.getBoundingClientRect();
+  placeMascot(rect.left, rect.top);
+});
 voiceModal.addEventListener("click", (event) => {
   if (event.target === voiceModal) closeVoiceModal();
 });

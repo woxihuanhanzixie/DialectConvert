@@ -12,7 +12,7 @@
 - `app/pipeline.py`: 主链路编排，顺序为清理缓存、ASR、情绪/标点分析、方言改写、音色注册、TTS 合成。
 - `app/providers.py`: DashScope/Qwen/CosyVoice API 调用，包括 ASR、LLM 改写、情绪标注、音色注册和语音合成。
 - `app/storage.py`: 上传文件、输出文件、元数据、音色缓存和运行时清理。
-- `static/`: 单页前端，包含移动端录音、手机系统录音器兜底、上传、提交、结果展示。
+- `static/`: 单页前端，包含移动端录音、手机系统录音器兜底、上传、提交、结果展示和已注册音色的继续合成入口。
 - `scripts/deploy_tencent_cloud_tar.sh`: 推荐部署脚本，在 WSL/Ubuntu 或 Linux 中用 tar + ssh 部署到腾讯云。
 - `scripts/deploy_tencent_cloud.ps1`: PowerShell 备用部署脚本，不作为首选部署方式。
 - `tests/`: 单元测试，覆盖主链路、缓存清理、移动端音频扩展名识别和 TTS 指令拼接。
@@ -38,6 +38,7 @@
 7. `enroll_voice` 注册或复用音色缓存。
 8. `synthesize` 使用 CosyVoice 复刻音色生成方言语音。
 9. 前端展示 `source_text`、`emotion_label`、`prosody_instruction`、`dialect_text` 和音频。
+10. 当 Voice Matched 成功并返回 `voice_id` 后，前端显示可拖动的像素风小吉祥物入口；用户点击后打开文本输入弹窗，继续使用已注册音色进行 LLM 情绪语调处理和合成。
 
 ## 部署约定
 
