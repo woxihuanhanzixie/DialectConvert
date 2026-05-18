@@ -750,8 +750,8 @@ audio {
   right: 18px;
   bottom: max(18px, env(safe-area-inset-bottom));
   z-index: 18;
-  width: 132px;
-  height: 162px;
+  width: 116px;
+  height: 112px;
   border: 0;
   background: transparent;
   padding: 0;
@@ -772,8 +772,8 @@ audio {
 
 .mascot-bubble {
   position: absolute;
-  right: 96px;
-  bottom: 74px;
+  right: 82px;
+  bottom: 32px;
   width: 168px;
   padding: 9px 12px;
   border: 1px solid rgba(125, 211, 252, 0.5);
@@ -804,8 +804,8 @@ audio {
   position: absolute;
   right: 4px;
   bottom: 0;
-  width: 104px;
-  height: 136px;
+  width: 90px;
+  height: 98px;
   image-rendering: pixelated;
   transform-origin: center bottom;
   animation: mascotIdle 2.8s steps(2, end) infinite;
@@ -813,10 +813,10 @@ audio {
 
 .mascot-head {
   position: absolute;
-  left: 13px;
-  top: 32px;
-  width: 78px;
-  height: 62px;
+  left: 8px;
+  top: 35px;
+  width: 74px;
+  height: 58px;
   border: 5px solid #6b4f2c;
   border-radius: 16px;
   background: #dfe7ad;
@@ -848,10 +848,10 @@ audio {
 
 .mascot-screen {
   position: absolute;
-  left: 10px;
-  top: 15px;
-  width: 48px;
-  height: 30px;
+  left: 9px;
+  top: 14px;
+  width: 46px;
+  height: 29px;
   border: 3px solid #b38546;
   border-radius: 8px;
   background: #ffe7ba;
@@ -894,9 +894,9 @@ audio {
 
 .mascot-ear {
   position: absolute;
-  top: 53px;
-  width: 13px;
-  height: 28px;
+  top: 55px;
+  width: 12px;
+  height: 27px;
   border: 4px solid #6b4f2c;
   background: #cdd99a;
 }
@@ -915,8 +915,8 @@ audio {
 
 .mascot-sprout {
   position: absolute;
-  left: 48px;
-  top: 2px;
+  left: 42px;
+  top: 0;
   width: 8px;
   height: 34px;
   background: #765d2e;
@@ -946,6 +946,12 @@ audio {
   left: 4px;
   border-radius: 4px 14px 3px 12px;
   transform: rotate(-10deg);
+}
+
+.mascot-torso,
+.mascot-arm,
+.mascot-foot {
+  display: none;
 }
 
 .mascot-torso {
@@ -1152,13 +1158,13 @@ audio {
   }
 
   .voice-mascot {
-    width: 116px;
-    height: 148px;
+    width: 106px;
+    height: 104px;
   }
 
   .mascot-bubble {
     right: 0;
-    bottom: 126px;
+    bottom: 92px;
     width: 142px;
     font-size: 11px;
   }
