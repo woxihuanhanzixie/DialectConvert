@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+import app.main as main
 from app.main import _is_supported_upload
 from app.main import app
 
@@ -23,3 +24,58 @@ def test_mobile_capture_content_types_are_supported():
 
 def test_non_audio_upload_is_rejected():
     assert not _is_supported_upload(SimpleNamespace(filename="payload.exe", content_type="application/octet-stream"))
+
+
+def test_convert_internal_errors_are_sanitized(monkeypatch, tmp_path):
+    audio = tmp_path / "short.wav"
+    audio.write_bytes(b"fake")
+
+    async def fake_save_upload(upload, job_id):
+        return audio
+
+    monkeypatch.setattr(main, "save_upload", fake_save_upload)
+    monkeypatch.setattr(main, "ensure_reference_audio_duration", lambda path: 2.0)
+    monkeypatch.setattr(main, "convert_audio", lambda job_id, path, dialect: (_ for _ in ()).throw(RuntimeError("raw backend error")))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/convert",
+            data={"dialect": "cantonese"},
+            files={"audio": ("demo.wav", b"fake", "audio/wav")},
+        )
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "服务器繁忙，请稍后再试"}
+
+
+def test_convert_without_playable_audio_is_sanitized(monkeypatch, tmp_path):
+    audio = tmp_path / "short.wav"
+    audio.write_bytes(b"fake")
+
+    async def fake_save_upload(upload, job_id):
+        return audio
+
+    monkeypatch.setattr(main, "save_upload", fake_save_upload)
+    monkeypatch.setattr(main, "ensure_reference_audio_duration", lambda path: 2.0)
+    monkeypatch.setattr(main, "update_job_metadata", lambda job_id, payload: None)
+    monkeypatch.setattr(
+        main,
+        "convert_audio",
+        lambda job_id, path, dialect: SimpleNamespace(
+            status="failed",
+            recommended_audio_url=None,
+            gold_audio_url=None,
+            voice_matched_audio_url=None,
+            warnings=["raw provider warning"],
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/convert",
+            data={"dialect": "cantonese"},
+            files={"audio": ("demo.wav", b"fake", "audio/wav")},
+        )
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "服务器繁忙，请稍后再试"}

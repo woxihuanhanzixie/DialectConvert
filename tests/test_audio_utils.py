@@ -14,7 +14,7 @@ def _write_silent_wav(path, seconds=1, rate=16000):
         audio.writeframes(b"\x00\x00" * rate * seconds)
 
 
-def test_reference_audio_short_wav_gets_chinese_error(monkeypatch, tmp_path):
+def test_reference_audio_short_wav_is_allowed_to_enter_pipeline(monkeypatch, tmp_path):
     audio = tmp_path / "short.wav"
     _write_silent_wav(audio, seconds=2)
     monkeypatch.setattr(
@@ -23,8 +23,7 @@ def test_reference_audio_short_wav_gets_chinese_error(monkeypatch, tmp_path):
         SimpleNamespace(ref_audio_min_s=8, ref_audio_max_s=40),
     )
 
-    with pytest.raises(ValueError, match="服务器繁忙，请稍后再试"):
-        audio_utils.ensure_reference_audio_duration(audio)
+    assert audio_utils.ensure_reference_audio_duration(audio) == pytest.approx(2.0)
 
 
 def test_reference_audio_valid_wav_returns_duration(monkeypatch, tmp_path):

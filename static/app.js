@@ -350,10 +350,6 @@ async function refreshPreviewDuration(file) {
   updateAudioMeta(file, duration);
   if (Number.isFinite(duration)) {
     recordTimer.textContent = formatTime(duration * 1000);
-    if (duration < minAudioSeconds()) {
-      recordState.textContent = serverBusyMessage();
-      renderMessage(serverBusyMessage(), "warn");
-    }
   }
 }
 
@@ -478,7 +474,7 @@ async function startRecording() {
         recordState.textContent = "录音已取消";
         return;
       }
-      if (!chunks.length || durationMs < minAudioSeconds() * 1000) {
+      if (!chunks.length || durationMs < 800) {
         renderMessage(serverBusyMessage(), "warn");
         recordState.textContent = serverBusyMessage();
         return;
@@ -657,11 +653,6 @@ form.addEventListener("submit", async (event) => {
       state.selectedDurationS = durationS;
       updateAudioMeta(selectedAudio, durationS);
     }
-  }
-  if (Number.isFinite(durationS) && durationS < minAudioSeconds()) {
-    renderMessage(serverBusyMessage(), "warn");
-    recordState.textContent = serverBusyMessage();
-    return;
   }
   if (Number.isFinite(durationS) && durationS > maxAudioSeconds()) {
     renderMessage(`音频过长，请控制在 ${maxAudioSeconds()}s 以内。`, "warn");

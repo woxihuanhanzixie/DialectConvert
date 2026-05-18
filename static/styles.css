@@ -126,7 +126,8 @@ h1 {
 
 .live-card,
 .action-panel,
-.result-panel {
+.result-panel,
+.culture-panel {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -382,6 +383,11 @@ audio {
   padding: 22px;
 }
 
+.culture-panel {
+  margin-top: 22px;
+  padding: 22px;
+}
+
 .value-grid {
   display: grid;
   gap: 12px;
@@ -414,7 +420,6 @@ audio {
 .primary {
   width: 100%;
   min-height: 86px;
-  margin-top: auto;
   display: grid;
   place-items: center;
   gap: 3px;
@@ -689,7 +694,8 @@ audio {
 
   .live-card,
   .action-panel,
-  .result-panel {
+  .result-panel,
+  .culture-panel {
     width: 100%;
     max-width: 430px;
     border-radius: 8px;
@@ -729,5 +735,24 @@ audio {
 
   .primary {
     min-height: 76px;
+  }
+
+  .action-panel {
+    gap: 14px;
+  }
+
+  .steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .steps li {
+    min-height: 34px;
+    font-size: 13px;
+  }
+
+  .steps li::before {
+    width: 24px;
+    height: 24px;
   }
 }

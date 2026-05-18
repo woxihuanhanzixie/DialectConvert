@@ -92,6 +92,8 @@ async def convert(
                 "warning_count": len(result.warnings),
             },
         )
+        if not result.recommended_audio_url:
+            raise RuntimeError("conversion produced no playable audio")
         return result
     except ValueError as exc:
         if "audio_path" in locals():
@@ -99,4 +101,4 @@ async def convert(
             (settings.metadata_dir / f"{job_id}.json").unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail="服务器繁忙，请稍后再试") from exc
