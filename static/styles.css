@@ -1,16 +1,16 @@
 :root {
   color-scheme: dark;
   --ink: #f7fbff;
-  --muted: #9aa7b5;
-  --soft: #c9d7e6;
-  --line: rgba(255, 255, 255, 0.12);
-  --panel: rgba(17, 24, 39, 0.74);
-  --panel-strong: rgba(10, 14, 22, 0.92);
+  --muted: #a7b3c2;
+  --soft: #d4e0ee;
+  --line: rgba(255, 255, 255, 0.16);
+  --panel: rgba(21, 28, 40, 0.88);
+  --panel-strong: rgba(12, 17, 25, 0.96);
   --accent: #7dd3fc;
   --accent-2: #34d399;
   --accent-3: #f9c74f;
   --danger: #ef4444;
-  --shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  --shadow: 0 18px 54px rgba(0, 0, 0, 0.28);
 }
 
 * {
@@ -32,8 +32,8 @@ body {
   color: var(--ink);
   font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
   background:
-    radial-gradient(circle at 50% 120%, rgba(125, 211, 252, 0.34), transparent 30%),
-    linear-gradient(180deg, #0b0f16 0%, #151c28 62%, #edf6ff 190%);
+    radial-gradient(circle at 50% 110%, rgba(52, 211, 153, 0.22), transparent 28%),
+    linear-gradient(180deg, #0b0f16 0%, #151c28 68%, #223248 155%);
 }
 
 button,
@@ -132,7 +132,7 @@ h1 {
   border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(10px);
 }
 
 .live-card {
@@ -188,7 +188,7 @@ h1 {
   min-width: 0;
   min-height: 420px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(125, 211, 252, 0.2);
   border-radius: 8px;
   background: #0c1018;
 }
@@ -265,7 +265,7 @@ h1 {
   min-height: 46px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;
   color: var(--soft);
   background: rgba(255, 255, 255, 0.07);
@@ -296,6 +296,13 @@ h1 {
   font-weight: 800;
   touch-action: none;
   user-select: none;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.round-button:active,
+.chip-delete:active,
+.primary:active {
+  transform: translateY(1px);
 }
 
 .add-button {
@@ -320,10 +327,11 @@ h1 {
   display: grid;
   gap: 10px;
   grid-template-columns: 1fr auto;
-  padding: 14px;
-  border: 1px solid var(--line);
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid rgba(125, 211, 252, 0.24);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.09);
 }
 
 .audio-chip strong,
@@ -338,16 +346,23 @@ h1 {
 }
 
 .chip-delete {
-  width: 34px;
-  height: 34px;
+  min-width: 48px;
+  height: 32px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(239, 68, 68, 0.36);
-  border-radius: 50%;
-  color: #fecaca;
-  background: rgba(239, 68, 68, 0.16);
-  font-size: 22px;
+  border: 1px solid rgba(248, 113, 113, 0.34);
+  border-radius: 999px;
+  color: #fee2e2;
+  background: rgba(127, 29, 29, 0.36);
+  font-size: 13px;
+  font-weight: 800;
   line-height: 1;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.chip-delete:hover {
+  border-color: rgba(248, 113, 113, 0.62);
+  background: rgba(153, 27, 27, 0.48);
 }
 
 .audio-chip audio {
@@ -375,7 +390,7 @@ audio {
 .value-grid article {
   min-height: 112px;
   padding: 16px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.07);
 }
@@ -409,6 +424,11 @@ audio {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   box-shadow: 0 16px 44px rgba(45, 212, 191, 0.22);
   font-weight: 800;
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+.primary:hover {
+  filter: brightness(1.05);
 }
 
 .primary small {
@@ -595,6 +615,14 @@ audio {
   line-height: 1.55;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .round-button,
+  .chip-delete,
+  .primary {
+    transition: none;
+  }
+}
+
 .warn-card p {
   margin: 0;
 }
@@ -635,8 +663,8 @@ audio {
 
 @media (max-width: 520px) {
   .app-shell {
-    width: min(calc(100vw - 20px), 370px);
-    margin: 0;
+    width: min(calc(100vw - 20px), 430px);
+    margin: 0 auto;
     padding: 12px 0 26px;
   }
 
@@ -663,7 +691,7 @@ audio {
   .action-panel,
   .result-panel {
     width: 100%;
-    max-width: 370px;
+    max-width: 430px;
     border-radius: 8px;
     padding: 14px;
   }

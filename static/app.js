@@ -39,8 +39,8 @@ const state = {
   pointerStartY: 0,
   cancelOnStop: false,
   ignoreNextClick: false,
-  fallbackTimerId: null,
   nativeCaptureActive: false,
+  lastDrawAt: 0,
   audioLimits: {
     minSeconds: DEFAULT_MIN_AUDIO_SECONDS,
     maxSeconds: DEFAULT_MAX_AUDIO_SECONDS,
@@ -89,10 +89,10 @@ function isLikelyIOS() {
 function configureNativeRecorderInput() {
   if (isLikelyIOS()) {
     recordInput.removeAttribute("capture");
-    recordInput.setAttribute("accept", "audio/*,.m4a,.mp4,.caf");
+    recordInput.setAttribute("accept", "audio/*,.m4a,.mp4,.caf,.wav,.mp3");
   } else {
     recordInput.setAttribute("capture", "microphone");
-    recordInput.setAttribute("accept", "audio/*,.m4a,.mp4,.3gp,.3gpp,.caf,.amr");
+    recordInput.setAttribute("accept", "audio/*,.m4a,.mp4,.3gp,.3gpp,.caf,.amr,.wav,.mp3");
   }
 }
 
@@ -157,6 +157,12 @@ function resetSteps() {
 }
 
 function drawIdleWave() {
+  const now = performance.now();
+  if (now - state.lastDrawAt < 80) {
+    state.animationId = requestAnimationFrame(drawIdleWave);
+    return;
+  }
+  state.lastDrawAt = now;
   const width = waveCanvas.width;
   const height = waveCanvas.height;
   state.demoPulse += 0.018;
@@ -188,6 +194,12 @@ function drawIdleWave() {
 }
 
 function drawLiveWave() {
+  const now = performance.now();
+  if (now - state.lastDrawAt < 33) {
+    state.animationId = requestAnimationFrame(drawLiveWave);
+    return;
+  }
+  state.lastDrawAt = now;
   const width = waveCanvas.width;
   const height = waveCanvas.height;
   ctx.clearRect(0, 0, width, height);
@@ -198,7 +210,7 @@ function drawLiveWave() {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
-  const bars = 58;
+  const bars = window.innerWidth <= 520 ? 34 : 46;
   const centerY = height * 0.66;
   ctx.lineCap = "round";
   ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
@@ -229,6 +241,7 @@ function drawLiveWave() {
 function stopDrawing() {
   if (state.animationId) cancelAnimationFrame(state.animationId);
   state.animationId = null;
+  state.lastDrawAt = 0;
 }
 
 function startTimer() {
@@ -268,6 +281,10 @@ function resetRecordingUi() {
   waveWrap.classList.remove("is-recording", "is-canceling");
   liveLabel.textContent = "Live";
   drawIdleWave();
+}
+
+function serverBusyMessage() {
+  return "服务器繁忙，请稍后再试";
 }
 
 function makePreviewUrl(file) {
@@ -334,8 +351,8 @@ async function refreshPreviewDuration(file) {
   if (Number.isFinite(duration)) {
     recordTimer.textContent = formatTime(duration * 1000);
     if (duration < minAudioSeconds()) {
-      recordState.textContent = `音频太短，请输入大于 ${minAudioSeconds()}s 的音频`;
-      renderMessage(`请输入大于 ${minAudioSeconds()}s 的音频。建议录制 ${minAudioSeconds()}-${maxAudioSeconds()} 秒，音色复刻会更稳定。`, "warn");
+      recordState.textContent = serverBusyMessage();
+      renderMessage(serverBusyMessage(), "warn");
     }
   }
 }
@@ -385,19 +402,15 @@ function clearAudio() {
 function openNativeRecorder(reason = "") {
   stopTimer();
   stopDrawing();
-  drawLiveWave();
-  state.startedAt = Date.now();
+  drawIdleWave();
   recordTimer.textContent = "00:00";
   recordState.textContent = isLikelyIOS()
-    ? "正在打开音频选择器，请选择语音备忘录或音频文件"
-    : "正在打开手机录音器，录完返回后会自动载入音频";
-  serviceState.textContent = "Native record";
-  liveLabel.textContent = "Phone recorder";
-  waveWrap.classList.add("is-recording");
+    ? "请选择语音备忘录或音频文件"
+    : "正在打开系统录音器，录完返回后会自动载入音频";
+  serviceState.textContent = "Choose audio";
+  liveLabel.textContent = "Audio input";
+  waveWrap.classList.remove("is-recording", "is-canceling");
   state.nativeCaptureActive = true;
-  state.fallbackTimerId = window.setInterval(() => {
-    recordTimer.textContent = formatTime(Date.now() - state.startedAt);
-  }, 250);
   const handleReturn = () => {
     window.setTimeout(() => {
       if (!state.nativeCaptureActive) return;
@@ -415,8 +428,6 @@ function openNativeRecorder(reason = "") {
 }
 
 function finishNativeRecorderUi() {
-  if (state.fallbackTimerId) clearInterval(state.fallbackTimerId);
-  state.fallbackTimerId = null;
   resetRecordingUi();
 }
 
@@ -424,7 +435,7 @@ async function startRecording() {
   if (state.recorder && state.recorder.state === "recording") return;
   if (!supportsLiveMicrophone()) {
     const reason = isLikelyIOS()
-      ? "iOS 在 HTTP 页面无法稳定调起纯音频录音。已改为音频文件选择，避免跳到视频录制；也可以用 HTTPS 访问后直接网页录音。"
+      ? "当前 HTTP 页面无法在 iOS 上直接调用网页麦克风。请选择语音备忘录里的音频；绑定 HTTPS 后可使用网页内录音。"
       : window.isSecureContext
       ? "当前浏览器不支持网页内录音，已切换到手机系统录音器。"
       : "当前页面不是 HTTPS，手机浏览器会禁止网页直接访问麦克风，已切换到手机系统录音器。";
@@ -468,8 +479,8 @@ async function startRecording() {
         return;
       }
       if (!chunks.length || durationMs < minAudioSeconds() * 1000) {
-        renderMessage(`请输入大于 ${minAudioSeconds()}s 的音频。建议录制 ${minAudioSeconds()}-${maxAudioSeconds()} 秒，环境安静、单人说话效果最好。`, "warn");
-        recordState.textContent = "录音太短，请重新录制";
+        renderMessage(serverBusyMessage(), "warn");
+        recordState.textContent = serverBusyMessage();
         return;
       }
       const blob = new Blob(chunks, { type: mimeType });
@@ -648,8 +659,8 @@ form.addEventListener("submit", async (event) => {
     }
   }
   if (Number.isFinite(durationS) && durationS < minAudioSeconds()) {
-    renderMessage(`请输入大于 ${minAudioSeconds()}s 的音频。建议录制 ${minAudioSeconds()}-${maxAudioSeconds()} 秒，音色复刻会更稳定。`, "warn");
-    recordState.textContent = "音频太短，请重新录制或上传";
+    renderMessage(serverBusyMessage(), "warn");
+    recordState.textContent = serverBusyMessage();
     return;
   }
   if (Number.isFinite(durationS) && durationS > maxAudioSeconds()) {
@@ -698,3 +709,13 @@ fetchAudioLimits();
 clearAudio();
 stopDrawing();
 drawIdleWave();
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    stopDrawing();
+  } else if (state.recorder && state.recorder.state === "recording") {
+    drawLiveWave();
+  } else {
+    drawIdleWave();
+  }
+});

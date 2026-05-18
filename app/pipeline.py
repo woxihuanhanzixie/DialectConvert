@@ -108,7 +108,7 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
         )
     except ProviderError as exc:
         if is_audio_too_short_error(exc):
-            warnings.append(f"Voice Matched 克隆音色失败：请输入大于 {settings.ref_audio_min_s}s 的音频")
+            warnings.append("Voice Matched 克隆音色失败：服务器繁忙，请稍后再试")
         else:
             warnings.append(f"Voice Matched cloned synthesis failed; kept Gold Teacher: {exc}")
 

@@ -23,7 +23,7 @@ def test_reference_audio_short_wav_gets_chinese_error(monkeypatch, tmp_path):
         SimpleNamespace(ref_audio_min_s=8, ref_audio_max_s=40),
     )
 
-    with pytest.raises(ValueError, match="请输入大于 8s 的音频"):
+    with pytest.raises(ValueError, match="服务器繁忙，请稍后再试"):
         audio_utils.ensure_reference_audio_duration(audio)
 
 

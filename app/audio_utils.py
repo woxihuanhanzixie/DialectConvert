@@ -22,7 +22,7 @@ def audio_duration_seconds(path: Path) -> float | None:
 def ensure_reference_audio_duration(path: Path) -> float | None:
     duration = audio_duration_seconds(path)
     if duration is not None and duration < settings.ref_audio_min_s:
-        raise ValueError(f"请输入大于 {settings.ref_audio_min_s}s 的音频")
+        raise ValueError("服务器繁忙，请稍后再试")
     if duration is not None and duration > settings.ref_audio_max_s:
         raise ValueError(f"音频过长，请控制在 {settings.ref_audio_max_s}s 以内")
     return duration

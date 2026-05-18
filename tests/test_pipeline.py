@@ -110,4 +110,4 @@ def test_convert_audio_translates_audio_short_warning(monkeypatch, tmp_path):
 
     assert result.gold_audio_url
     assert not result.voice_matched_audio_url
-    assert result.warnings == ["Voice Matched \u514b\u9686\u97f3\u8272\u5931\u8d25\uff1a\u8bf7\u8f93\u5165\u5927\u4e8e 8s \u7684\u97f3\u9891"]
+    assert result.warnings == ["Voice Matched \u514b\u9686\u97f3\u8272\u5931\u8d25\uff1a\u670d\u52a1\u5668\u7e41\u5fd9\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5"]
