@@ -58,7 +58,7 @@ def test_convert_audio_prefers_voice_matched(monkeypatch, tmp_path):
     assert synth_calls
     assert {call["text"] for call in synth_calls} == {dialect_text}
     assert {call["instruction"] for call in synth_calls} == {
-        "\u8bf7\u7528\u81ea\u7136\u56db\u5ddd\u8bdd\u8868\u8fbe\uff0c\u4e0d\u8981\u7528\u666e\u901a\u8bdd\u8154\uff0c\u8bed\u6c14\u5938\u5f20\uff0c\u5c3e\u97f3\u4e0a\u626c\u3002"
+        "\u8bf7\u7528\u56db\u5ddd\u8bdd\u8868\u8fbe\uff0c\u8bed\u6c14\u5938\u5f20\uff0c\u5c3e\u97f3\u4e0a\u626c\u3002"
     }
     assert {call["language_hint"] for call in synth_calls} == {"zh"}
 
@@ -69,7 +69,7 @@ def test_build_tts_instruction_keeps_dialect_and_caps_length():
         "\u8bed\u6c14\u7126\u6025\uff0c\u505c\u987f\u66f4\u77ed\uff0c\u5c3e\u97f3\u7565\u4e0a\u626c",
     )
 
-    assert instruction.startswith("\u8bf7\u7528\u6807\u51c6\u5e7f\u4e1c\u8bdd\u81ea\u7136\u8868\u8fbe")
+    assert instruction.startswith("\u8bf7\u7528\u5e7f\u4e1c\u8bdd\u8868\u8fbe")
     assert "\u8bed\u6c14\u7126\u6025" in instruction
     assert len(instruction) <= 95
 
@@ -143,47 +143,6 @@ def test_speak_with_registered_voice_uses_existing_voice(monkeypatch):
         {
             "text": "\u4eca\u665a\u8bb0\u5f97\u8fd4\u5c4b\u4f01\u98df\u996d\u3002",
             "voice": "voice-123",
-            "instruction": "\u8bf7\u7528\u6807\u51c6\u5e7f\u4e1c\u8bdd\u81ea\u7136\u8868\u8fbe\uff0c\u4e0d\u8981\u7528\u666e\u901a\u8bdd\u53d1\u97f3\uff0c\u8bed\u6c14\u660e\u4eae\uff0c\u8282\u594f\u8f7b\u5feb\u3002",
+            "instruction": "\u8bf7\u7528\u5e7f\u4e1c\u8bdd\u8868\u8fbe\uff0c\u8bed\u6c14\u660e\u4eae\uff0c\u8282\u594f\u8f7b\u5feb\u3002",
         }
     ]
-
-
-def test_demo_phrase_uses_fixed_cantonese_rewrite(monkeypatch, tmp_path):
-    audio = tmp_path / "ref.wav"
-    audio.write_bytes(b"fake-audio")
-    synth_calls = []
-
-    demo_text = "各位评委老师，你们好，我们是身临其境项目组的成员，很荣幸可以参加这次的AI应用创新大赛！"
-
-    monkeypatch.setattr(pipeline, "cleanup_runtime", lambda: 0)
-    monkeypatch.setattr(pipeline, "transcribe_audio", lambda path: demo_text)
-    monkeypatch.setattr(
-        pipeline,
-        "analyze_expression",
-        lambda text: {
-            "display_text": text,
-            "emotion_label": "正式",
-            "prosody_instruction": "语气清晰，正式有礼貌",
-        },
-    )
-    monkeypatch.setattr(
-        pipeline,
-        "rewrite_to_dialect",
-        lambda text, dialect, expression=None: {"dialect_text": "SHOULD_NOT_USE_MODEL", "pronunciation_note": ""},
-    )
-    monkeypatch.setattr(pipeline, "voice_cache_key", lambda path, model: "cache")
-    monkeypatch.setattr(pipeline, "read_voice_cache", lambda key: {"voice_id": "voice-1"})
-
-    def fake_synth(text, output_path, *, voice, model=None, instruction=None, language_hint="zh"):
-        synth_calls.append({"text": text, "instruction": instruction, "voice": voice})
-        return f"/media/{output_path.name}-{voice}.mp3"
-
-    monkeypatch.setattr(pipeline, "synthesize", fake_synth)
-
-    result = pipeline.convert_audio("job", audio, "cantonese")
-
-    assert "我哋係" in result.dialect_text
-    assert "大家好" in result.dialect_text
-    assert "SHOULD_NOT_USE_MODEL" not in result.dialect_text
-    assert {call["text"] for call in synth_calls} == {result.dialect_text}
-    assert all("不要用普通话发音" in call["instruction"] for call in synth_calls)

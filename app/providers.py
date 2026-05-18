@@ -314,8 +314,7 @@ def analyze_expression(source_text: str) -> dict[str, str]:
             {"role": "system", "content": "你只输出合法 JSON，不输出 Markdown。"},
             {"role": "user", "content": prompt},
         ],
-        "temperature": 0,
-        "top_p": 0.1,
+        "temperature": 0.2,
     }
     try:
         data = _request_json("POST", url, headers=_headers(settings.qwen_llm_api_key), payload=payload)
@@ -420,8 +419,7 @@ def rewrite_to_dialect(source_text: str, dialect: str, expression: dict[str, str
             {"role": "system", "content": "你只输出合法 JSON，不输出 Markdown。"},
             {"role": "user", "content": prompt},
         ],
-        "temperature": 0,
-        "top_p": 0.1,
+        "temperature": 0.35,
     }
     data = _request_json("POST", url, headers=_headers(settings.qwen_llm_api_key), payload=payload)
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()

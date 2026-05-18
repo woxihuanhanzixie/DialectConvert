@@ -134,8 +134,7 @@ systemctl restart dialect-convert
 nginx -t
 systemctl reload nginx
 systemctl --no-pager --full status dialect-convert
-grep -n "DEMO_PHRASE_REWRITES" app/pipeline.py
-grep -n "temperature.: 0" app/providers.py
+grep -n "\\\\u8bf7\\\\u7528\\\\u5e7f\\\\u4e1c\\\\u8bdd\\\\u8868\\\\u8fbe" app/pipeline.py
 REMOTE
 
 echo "Deployment finished. Visit: $PUBLIC_BASE_URL"
