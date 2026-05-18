@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 from .audio_utils import ensure_reference_audio_duration
 from .config import ROOT_DIR, settings
 from .models import HealthResult
-from .pipeline import convert_audio
+from .pipeline import convert_audio, speak_with_registered_voice
 from .storage import ALLOWED_AUDIO_EXTS, ensure_dirs, new_job_id, save_upload, update_job_metadata
 
 
@@ -67,13 +67,17 @@ def _is_supported_upload(upload: UploadFile) -> bool:
     return content_type.startswith("audio/") or content_type in {"video/mp4", "video/quicktime"}
 
 
+def _validate_dialect(dialect: str) -> None:
+    if dialect not in {"cantonese", "sichuanese", "hokkien"}:
+        raise HTTPException(status_code=400, detail="暂只支持粤语、四川话、闽南话")
+
+
 @app.post("/api/convert")
 async def convert(
     dialect: str = Form(...),
     audio: UploadFile = File(...),
 ):
-    if dialect not in {"cantonese", "sichuanese", "hokkien"}:
-        raise HTTPException(status_code=400, detail="暂只支持粤语、四川话、闽南话")
+    _validate_dialect(dialect)
     if not _is_supported_upload(audio):
         raise HTTPException(status_code=400, detail="请上传音频文件")
     job_id = new_job_id()
@@ -100,5 +104,37 @@ async def convert(
             audio_path.unlink(missing_ok=True)
             (settings.metadata_dir / f"{job_id}.json").unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="服务器繁忙，请稍后再试") from exc
+
+
+@app.post("/api/speak-with-voice")
+async def speak_with_voice(
+    dialect: str = Form(...),
+    voice_id: str = Form(...),
+    text: str = Form(...),
+):
+    _validate_dialect(dialect)
+    clean_text = " ".join(text.split()).strip()
+    clean_voice_id = voice_id.strip()
+    if not clean_voice_id or len(clean_voice_id) > 120:
+        raise HTTPException(status_code=400, detail="音色未准备好，请先完成一次音色复刻")
+    if len(clean_text) < 2:
+        raise HTTPException(status_code=400, detail="请输入要朗读的文本")
+    if len(clean_text) > 180:
+        raise HTTPException(status_code=400, detail="文本过长，请控制在 180 字以内")
+    job_id = new_job_id()
+    try:
+        result = await run_in_threadpool(speak_with_registered_voice, job_id, clean_text, dialect, clean_voice_id)
+        update_job_metadata(
+            job_id,
+            {
+                "dialect": dialect,
+                "status": result.status,
+                "mode": "registered_voice_text",
+                "has_voice_matched_audio": True,
+            },
+        )
+        return result
     except Exception as exc:
         raise HTTPException(status_code=502, detail="服务器繁忙，请稍后再试") from exc

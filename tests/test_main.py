@@ -79,3 +79,45 @@ def test_convert_without_playable_audio_is_sanitized(monkeypatch, tmp_path):
 
     assert response.status_code == 502
     assert response.json() == {"detail": "服务器繁忙，请稍后再试"}
+
+
+def test_speak_with_voice_endpoint_uses_registered_voice(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "speak_with_registered_voice",
+        lambda job_id, text, dialect, voice_id: SimpleNamespace(
+            job_id=job_id,
+            dialect=dialect,
+            source_text=f"{text}。",
+            dialect_text="今晚记得返屋企食饭。",
+            emotion_label="开心",
+            prosody_instruction="语气明亮，节奏轻快",
+            audio_url="/media/outputs/demo.mp3",
+            status="ok",
+        ),
+    )
+    monkeypatch.setattr(main, "update_job_metadata", lambda job_id, payload: None)
+
+    response = TestClient(app).post(
+        "/api/speak-with-voice",
+        data={"dialect": "cantonese", "voice_id": "voice-123", "text": "今晚记得回家吃饭"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["audio_url"] == "/media/outputs/demo.mp3"
+
+
+def test_speak_with_voice_endpoint_sanitizes_errors(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "speak_with_registered_voice",
+        lambda job_id, text, dialect, voice_id: (_ for _ in ()).throw(RuntimeError("raw provider error")),
+    )
+
+    response = TestClient(app).post(
+        "/api/speak-with-voice",
+        data={"dialect": "cantonese", "voice_id": "voice-123", "text": "今晚记得回家吃饭"},
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "服务器繁忙，请稍后再试"}

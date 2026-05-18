@@ -24,6 +24,17 @@ class ConversionResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class RegisteredVoiceSpeakResult(BaseModel):
+    job_id: str
+    dialect: Dialect
+    source_text: str
+    dialect_text: str
+    emotion_label: str = ""
+    prosody_instruction: str = ""
+    audio_url: str
+    status: str = "ok"
+
+
 class HealthResult(BaseModel):
     ok: bool
     app: str

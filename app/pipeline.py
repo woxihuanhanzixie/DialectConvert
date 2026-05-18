@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .audio_utils import is_audio_too_short_error
 from .config import settings
-from .models import ConversionResult
+from .models import ConversionResult, RegisteredVoiceSpeakResult
 from .providers import (
     ProviderError,
     analyze_expression,
@@ -128,4 +128,30 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
         voice_id=voice_id,
         status=status,
         warnings=warnings,
+    )
+
+
+def speak_with_registered_voice(job_id: str, text: str, dialect: str, voice_id: str) -> RegisteredVoiceSpeakResult:
+    expression = analyze_expression(text)
+    source_text = expression["display_text"]
+    rewritten = rewrite_to_dialect(source_text, dialect, expression)
+    dialect_text = rewritten["dialect_text"]
+    tts_control = DIALECT_TTS_CONTROLS[dialect]
+    tts_instruction = build_tts_instruction(dialect, expression["prosody_instruction"])
+    audio_url = synthesize(
+        dialect_text,
+        local_output_path(job_id, "registered_voice"),
+        voice=voice_id,
+        model=settings.qwen_voice_target_model,
+        instruction=tts_instruction,
+        language_hint=tts_control["language_hint"],
+    )
+    return RegisteredVoiceSpeakResult(
+        job_id=job_id,
+        dialect=dialect,  # type: ignore[arg-type]
+        source_text=source_text,
+        dialect_text=dialect_text,
+        emotion_label=expression.get("emotion_label", ""),
+        prosody_instruction=expression.get("prosody_instruction", ""),
+        audio_url=audio_url,
     )

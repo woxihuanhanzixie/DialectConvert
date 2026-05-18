@@ -111,3 +111,38 @@ def test_convert_audio_translates_audio_short_warning(monkeypatch, tmp_path):
     assert result.gold_audio_url
     assert not result.voice_matched_audio_url
     assert result.warnings == ["Voice Matched \u514b\u9686\u97f3\u8272\u5931\u8d25\uff1a\u670d\u52a1\u5668\u7e41\u5fd9\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5"]
+
+
+def test_speak_with_registered_voice_uses_existing_voice(monkeypatch):
+    synth_calls = []
+    monkeypatch.setattr(
+        pipeline,
+        "analyze_expression",
+        lambda text: {
+            "display_text": f"{text}\u3002",
+            "emotion_label": "\u5f00\u5fc3",
+            "prosody_instruction": "\u8bed\u6c14\u660e\u4eae\uff0c\u8282\u594f\u8f7b\u5feb",
+        },
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "rewrite_to_dialect",
+        lambda text, dialect, expression=None: {"dialect_text": "\u4eca\u665a\u8bb0\u5f97\u8fd4\u5c4b\u4f01\u98df\u996d\u3002", "pronunciation_note": ""},
+    )
+
+    def fake_synth(text, output_path, *, voice, model=None, instruction=None, language_hint="zh"):
+        synth_calls.append({"text": text, "voice": voice, "instruction": instruction})
+        return "/media/jobs/registered_voice.mp3"
+
+    monkeypatch.setattr(pipeline, "synthesize", fake_synth)
+
+    result = pipeline.speak_with_registered_voice("job2", "\u4eca\u665a\u8bb0\u5f97\u56de\u5bb6\u5403\u996d", "cantonese", "voice-123")
+
+    assert result.audio_url == "/media/jobs/registered_voice.mp3"
+    assert synth_calls == [
+        {
+            "text": "\u4eca\u665a\u8bb0\u5f97\u8fd4\u5c4b\u4f01\u98df\u996d\u3002",
+            "voice": "voice-123",
+            "instruction": "\u8bf7\u7528\u5e7f\u4e1c\u8bdd\u8868\u8fbe\uff0c\u8bed\u6c14\u660e\u4eae\uff0c\u8282\u594f\u8f7b\u5feb\u3002",
+        }
+    ]

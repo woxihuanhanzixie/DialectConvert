@@ -18,6 +18,11 @@ const waveCanvas = document.querySelector("#waveCanvas");
 const waveWrap = document.querySelector("#waveWrap");
 const liveLabel = document.querySelector("#liveLabel");
 const steps = [...document.querySelectorAll("#steps li")];
+const voiceModal = document.querySelector("#voiceModal");
+const voiceModalClose = document.querySelector("#voiceModalClose");
+const voiceTextInput = document.querySelector("#voiceTextInput");
+const voiceSpeakBtn = document.querySelector("#voiceSpeakBtn");
+const voiceModalOutput = document.querySelector("#voiceModalOutput");
 const DEFAULT_MIN_AUDIO_SECONDS = 10;
 const DEFAULT_MAX_AUDIO_SECONDS = 20;
 
@@ -45,6 +50,7 @@ const state = {
     minSeconds: DEFAULT_MIN_AUDIO_SECONDS,
     maxSeconds: DEFAULT_MAX_AUDIO_SECONDS,
   },
+  registeredVoice: null,
 };
 
 const dialectNames = {
@@ -538,12 +544,30 @@ function renderAudioBlock(title, url, tone, autoPlay = false) {
   `;
 }
 
+function openVoiceModal() {
+  if (!state.registeredVoice) return;
+  voiceModal.hidden = false;
+  voiceModalOutput.innerHTML = "";
+  window.setTimeout(() => voiceTextInput.focus(), 0);
+}
+
+function closeVoiceModal() {
+  voiceModal.hidden = true;
+}
+
 function renderResult(data) {
   const visibleWarnings = (data.warnings || []).filter(
     (item) => !(data.voice_matched_audio_url && String(item).includes("Gold Teacher synthesis failed"))
   );
   const warnings = visibleWarnings.map((item) => `<div class="warn-card">${escapeHtml(item)}</div>`).join("");
   const dialectLabel = dialectNames[data.dialect] || "方言";
+  state.registeredVoice =
+    data.voice_id && data.voice_matched_audio_url
+      ? {
+          voiceId: data.voice_id,
+          dialect: data.dialect,
+        }
+      : null;
   result.innerHTML = `
     <div class="result-head">
       <p>生成完成</p>
@@ -574,8 +598,18 @@ function renderResult(data) {
           : ""
       }
     </div>
+    ${
+      state.registeredVoice
+        ? `<div class="voice-continue"><strong>音色注册成功</strong><span>可以继续输入新文本，系统会先分析情绪语调，再用你的克隆音色朗读。</span><button id="openVoiceModalBtn" type="button">输入文本继续生成</button></div>`
+        : ""
+    }
     ${warnings}
   `;
+  const openVoiceModalBtn = document.querySelector("#openVoiceModalBtn");
+  if (openVoiceModalBtn) {
+    openVoiceModalBtn.addEventListener("click", openVoiceModal);
+    openVoiceModal();
+  }
 }
 
 fileInput.addEventListener("change", () => {
@@ -605,6 +639,40 @@ recordBtn.addEventListener("click", () => {
 stopBtn.addEventListener("click", () => stopRecording());
 clearBtn.addEventListener("click", clearAudio);
 deleteAudioBtn.addEventListener("click", clearAudio);
+voiceModalClose.addEventListener("click", closeVoiceModal);
+voiceModal.addEventListener("click", (event) => {
+  if (event.target === voiceModal) closeVoiceModal();
+});
+voiceSpeakBtn.addEventListener("click", async () => {
+  if (!state.registeredVoice) return;
+  const text = voiceTextInput.value.trim();
+  if (!text) {
+    voiceModalOutput.innerHTML = `<div class="warn-card"><p>请输入要朗读的文本</p></div>`;
+    return;
+  }
+  voiceSpeakBtn.disabled = true;
+  voiceSpeakBtn.textContent = "正在生成";
+  voiceModalOutput.textContent = "正在分析情绪语调并生成音频。";
+  try {
+    const body = new FormData();
+    body.append("dialect", state.registeredVoice.dialect);
+    body.append("voice_id", state.registeredVoice.voiceId);
+    body.append("text", text);
+    const response = await fetch("/api/speak-with-voice", { method: "POST", body });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "请求失败");
+    voiceModalOutput.innerHTML = `
+      <strong>${escapeHtml([data.emotion_label, data.prosody_instruction].filter(Boolean).join("；") || "自然口语")}</strong>
+      <span>${escapeHtml(data.dialect_text || data.source_text || "")}</span>
+      <audio src="${escapeHtml(data.audio_url)}" controls autoplay></audio>
+    `;
+  } catch (error) {
+    voiceModalOutput.innerHTML = `<div class="warn-card"><p>${escapeHtml(error.message || serverBusyMessage())}</p></div>`;
+  } finally {
+    voiceSpeakBtn.disabled = false;
+    voiceSpeakBtn.textContent = "用我的音色生成";
+  }
+});
 
 recordBtn.addEventListener("pointerdown", (event) => {
   if (!isLikelyMobile() || event.pointerType === "mouse" || !supportsLiveMicrophone()) return;

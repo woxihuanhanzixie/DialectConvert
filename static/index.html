@@ -122,6 +122,22 @@
         </div>
       </section>
     </main>
+
+    <div class="voice-modal" id="voiceModal" hidden>
+      <section class="voice-modal-card" aria-label="继续使用已注册音色">
+        <div class="voice-modal-head">
+          <div>
+            <span>音色已注册</span>
+            <strong>让这个声音继续说</strong>
+          </div>
+          <button class="modal-close" id="voiceModalClose" type="button" aria-label="关闭">×</button>
+        </div>
+        <label class="voice-textarea-label" for="voiceTextInput">输入要朗读的内容</label>
+        <textarea id="voiceTextInput" rows="4" maxlength="180" placeholder="例如：今晚回家吃饭，记得带上家乡的味道。"></textarea>
+        <button class="modal-primary" id="voiceSpeakBtn" type="button">用我的音色生成</button>
+        <div class="voice-modal-output" id="voiceModalOutput" aria-live="polite"></div>
+      </section>
+    </div>
     <script src="/static/app.js"></script>
   </body>
 </html>

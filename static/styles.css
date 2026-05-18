@@ -633,6 +633,110 @@ audio {
   margin: 0;
 }
 
+.voice-continue {
+  margin-top: 16px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 8px;
+  background: rgba(5, 150, 105, 0.12);
+}
+
+.voice-continue strong,
+.voice-continue span {
+  display: block;
+}
+
+.voice-continue span {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.voice-continue button,
+.modal-primary {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  color: #071016;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  font-weight: 800;
+}
+
+.voice-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: end center;
+  padding: 18px;
+  background: rgba(3, 7, 18, 0.48);
+}
+
+.voice-modal-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: var(--shadow);
+}
+
+.voice-modal-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.voice-modal-head span,
+.voice-textarea-label {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.voice-modal-head strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 20px;
+}
+
+.modal-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--soft);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 22px;
+}
+
+#voiceTextInput {
+  width: 100%;
+  min-height: 104px;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  line-height: 1.6;
+}
+
+.voice-modal-output {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.voice-modal-output audio {
+  margin-top: 4px;
+}
+
 @media (max-width: 940px) {
   .app-shell {
     width: min(100vw - 22px, 680px);
