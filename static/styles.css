@@ -496,6 +496,49 @@ audio {
   color: var(--accent-2);
 }
 
+.qr-card {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.qr-card img {
+  width: 96px;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.qr-card strong,
+.qr-card span,
+.qr-card a {
+  display: block;
+}
+
+.qr-card strong {
+  margin-bottom: 5px;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.qr-card span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.qr-card a {
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .result-panel {
   margin-top: 22px;
   padding: 22px;
