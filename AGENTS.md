@@ -58,9 +58,24 @@ curl -s http://43.139.53.84/health
 ssh -i ~/.ssh/dialectconvert_key.pem root@43.139.53.84 "systemctl is-active dialect-convert"
 ```
 
+## 环境配置
+
+- 真实转换必须配置 `DASHSCOPE_API_KEY` 和公网可回拉的 `PUBLIC_BASE_URL`，否则 ASR 和音色注册无法从云端读取上传音频。
+- `QWEN_LLM_API_KEY` 可单独配置；为空时当前代码会回退使用 `DASHSCOPE_API_KEY`。
+- 默认模型：ASR 为 `paraformer-v2`，LLM 为 `qwen-plus`，TTS 和音色复刻目标模型为 `cosyvoice-v3-flash`，音色注册模型为 `voice-enrollment`。
+- 运行时限制主要由 `MAX_UPLOAD_MB`、`CLEANUP_AFTER_HOURS`、`VOICE_CACHE_TTL_HOURS`、`API_REQUEST_TIMEOUT_S`、`API_MAX_RETRIES`、`SPEAKER_REF_AUDIO_MIN_S`、`SPEAKER_REF_AUDIO_MAX_S` 控制。
+- `ENABLE_MOCK_WHEN_NO_KEY=1` 只用于无密钥本地演示或测试，不会产生真实云端合成音频。
+- `.env.example` 是可提交的无密钥配置模板；`.env` 和 `.env.*` 必须继续忽略。
+
 ## 安全约束
 
 - 不提交 `.env`、私钥、API key、上传音频、输出音频和运行缓存。
 - 不在日志、文档或提交信息中暴露密钥内容。
 - 50G 服务器必须依赖 `cleanup_runtime`、`CLEANUP_AFTER_HOURS` 和音色缓存 TTL 控制磁盘增长。
 - CosyVoice `instruction` 保持短句，避免超长指令影响方言输出或触发接口限制。
+
+## 文档维护
+
+- `README.md` 是 GitHub 首页展示入口，需保持项目定位、模型清单、主链路、本地运行、部署方式和旧本地链路经验同步。
+- 修改 `app/config.py` 中的默认模型、接口地址或关键环境变量后，必须同步检查 `README.md` 和 `.env.example`。
+- 旧工作区 `D:\Competition` 的本地链路经验只作为历史参考，不应让 GitHub README 依赖本机绝对路径才能读懂项目。
