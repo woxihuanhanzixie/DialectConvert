@@ -75,7 +75,7 @@ flowchart TD
 
 ## 旧本地链路与失败经验
 
-本项目吸收了旧工作区 `D:\Competition` 中本地全流程项目的经验。旧路线曾尝试：
+本项目吸收了旧工作区local ASR model中本地全流程项目的经验。旧路线曾尝试：
 
 ```text
 音频输入 -> FireRedASR/VAD/LID/Punc -> LLM 审查纠错与方言改写
