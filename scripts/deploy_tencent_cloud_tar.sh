@@ -61,7 +61,7 @@ updates = {
     "QWEN_TTS_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "QWEN_TTS_MODEL": "cosyvoice-v3-plus",
     "QWEN_LLM_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "QWEN_LLM_MODEL": "qwen3-max",
+    "QWEN_LLM_MODEL": "qwen3.7-max",
     "QWEN_TTS_VOICE": "longanyang",
     "QWEN_VOICE_ENROLLMENT_MODEL": "voice-enrollment",
     "QWEN_VOICE_TARGET_MODEL": "cosyvoice-v3.5-plus",
