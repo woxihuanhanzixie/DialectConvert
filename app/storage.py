@@ -110,7 +110,7 @@ def sha256_file(path: Path) -> str:
 
 
 def public_url_for(path: Path) -> str:
-    rel = path.relative_to(settings.data_dir).as_posix()
+    rel = path.resolve().relative_to(settings.data_dir.resolve()).as_posix()
     if settings.public_base_url:
         return f"{settings.public_base_url.rstrip('/')}/media/{rel}"
     return f"/media/{rel}"
