@@ -381,7 +381,12 @@ def _ensure_sentence_punctuation(text: str, emotion_label: str) -> str:
     return f"{text}。"
 
 
-def rewrite_to_dialect(source_text: str, dialect: str, expression: dict[str, str] | None = None) -> dict[str, str]:
+def rewrite_to_dialect(
+    source_text: str,
+    dialect: str,
+    expression: dict[str, str] | None = None,
+    rag_context: str = "",
+) -> dict[str, str]:
     dialect_names = {
         "cantonese": "粤语/广东话",
         "sichuanese": "四川话/川渝口语",
@@ -402,6 +407,8 @@ def rewrite_to_dialect(source_text: str, dialect: str, expression: dict[str, str
             f"\n原句情绪：{expression.get('emotion_label', '自然')}。"
             f"\n朗读语调：{expression.get('prosody_instruction', '自然口语，有轻微起伏')}。"
         )
+    # RAG knowledge injection: prepend dialect reference before the source text
+    rag_block = f"\n{rag_context}\n" if rag_context else ""
     prompt = f"""
 你是中国方言口语化改写专家。把用户文本改写为自然、可朗读、适合 TTS 的{dialect_names[dialect]}。
 要求：
@@ -410,7 +417,7 @@ def rewrite_to_dialect(source_text: str, dialect: str, expression: dict[str, str
 3. 保留原句标点承载的停顿、惊讶、焦急、开心或低落等情绪。
 4. 避免生僻字堆砌，必要时使用常见汉字表达方言语气。
 5. 返回 JSON：{{"dialect_text": "...", "pronunciation_note": "简短说明"}}。
-
+{rag_block}
 用户文本：{source_text}{emotion_note}
 """.strip()
     payload = {

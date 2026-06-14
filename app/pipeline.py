@@ -13,6 +13,7 @@ from .providers import (
     synthesize,
     transcribe_audio,
 )
+from .rag import retrieve_dialect_knowledge
 from .storage import (
     cleanup_runtime,
     local_output_path,
@@ -58,7 +59,8 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
     raw_source_text = transcribe_audio(audio_path)
     expression = analyze_expression(raw_source_text)
     source_text = expression["display_text"]
-    rewritten = rewrite_to_dialect(source_text, dialect, expression)
+    rag_context = retrieve_dialect_knowledge(source_text, dialect)
+    rewritten = rewrite_to_dialect(source_text, dialect, expression, rag_context=rag_context)
     dialect_text = rewritten["dialect_text"]
     tts_control = DIALECT_TTS_CONTROLS[dialect]
     # Bind both content and pronunciation: the rewritten text carries dialect
@@ -134,7 +136,8 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
 def speak_with_registered_voice(job_id: str, text: str, dialect: str, voice_id: str) -> RegisteredVoiceSpeakResult:
     expression = analyze_expression(text)
     source_text = expression["display_text"]
-    rewritten = rewrite_to_dialect(source_text, dialect, expression)
+    rag_context = retrieve_dialect_knowledge(source_text, dialect)
+    rewritten = rewrite_to_dialect(source_text, dialect, expression, rag_context=rag_context)
     dialect_text = rewritten["dialect_text"]
     tts_control = DIALECT_TTS_CONTROLS[dialect]
     tts_instruction = build_tts_instruction(dialect, expression["prosody_instruction"])

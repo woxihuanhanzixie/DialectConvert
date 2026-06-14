@@ -39,6 +39,7 @@ def index() -> FileResponse:
 
 @app.get("/health", response_model=HealthResult)
 def health() -> HealthResult:
+    static_dir = ROOT_DIR / "static"
     return HealthResult(
         ok=True,
         app=settings.app_name,
@@ -47,6 +48,9 @@ def health() -> HealthResult:
             "qwen_llm_api_key": bool(settings.qwen_llm_api_key),
             "public_base_url": bool(settings.public_base_url),
             "voice_cache_dir": settings.cache_dir.exists(),
+            "static_index_html": (static_dir / "index.html").is_file(),
+            "static_app_js": (static_dir / "app.js").is_file(),
+            "static_styles_css": (static_dir / "styles.css").is_file(),
         },
     )
 

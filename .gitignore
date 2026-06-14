@@ -18,6 +18,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 ## Python
 __pycache__/
@@ -33,6 +34,12 @@ dist/
 *.egg-info/
 *.tar.gz
 tools/
+artifact-build-manifest.json
+
+## Large binaries / presentations (not source code)
+*.pptx
+*.pdf
+~$*.pptx
 
 ## Project runtime/model artifacts
 runtime_data/

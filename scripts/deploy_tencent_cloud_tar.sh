@@ -105,9 +105,9 @@ mkdir -p /etc/nginx/conf.d
 
 cat >/etc/nginx/conf.d/dialect_convert.conf <<NGINX
 server {
-    listen 80;
-    listen [::]:80;
-    server_name $HOST_NAME _;
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name $HOST_NAME;
 
     client_max_body_size 80m;
     proxy_read_timeout 600s;

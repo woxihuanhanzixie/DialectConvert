@@ -2,49 +2,136 @@
 
 ## 项目定位
 
-“声临其境”是一个方言音色复刻 Web 应用。用户在手机或电脑上录制/上传一段参考语音，系统完成 ASR 转写、方言口语化改写、情绪与语调分析、CosyVoice 音色注册和方言语音合成，最终输出带有用户音色的粤语、四川话或闽南话语音。
+"声临其境"是一个方言音色复刻 Web 应用。用户在手机或电脑上录制/上传一段参考语音，系统完成 ASR 转写、方言口语化改写、情绪与语调分析、CosyVoice 音色注册和方言语音合成，最终输出带有用户注册音色的粤语、四川话或闽南话语音。
 
 ## 当前结构
 
 - `app/`: FastAPI 后端。
-- `app/main.py`: HTTP 入口，提供首页、健康检查和 `/api/convert`。
-- `app/models.py`: API 响应模型，包含识别文本、方言文本、情绪标签、语调提示和音频 URL。
-- `app/pipeline.py`: 主链路编排，顺序为清理缓存、ASR、情绪/标点分析、方言改写、音色注册、TTS 合成。
-- `app/providers.py`: DashScope/Qwen/CosyVoice API 调用，包括 ASR、LLM 改写、情绪标注、音色注册和语音合成。
+- `app/main.py`: HTTP 入口，提供首页、健康检查、`/api/convert`、`/api/preview-audio` 和 `/api/speak-with-voice`。
+- `app/models.py`: API 响应模型。
+- `app/pipeline.py`: 当前主链路编排，顺序为清理缓存、ASR、情绪/标点分析、**RAG 方言知识检索**、方言改写、CosyVoice 方言 instruction 构造、系统音色合成、音色注册/缓存复用、用户音色方言合成。
+- `app/providers.py`: DashScope/Qwen/CosyVoice API 调用，包括 ASR、LLM 改写（含 RAG 上下文注入）、情绪标注、音色注册和语音合成。
+- `app/rag/`: **方言 RAG 语义增强模块**（详见「RAG 方言语义增强」节）。
+  - `__init__.py`: 模块入口。
+  - `knowledge_base.py`: JSON 知识库加载、缓存、关键词检索。
+  - `retriever.py`: jieba 分词 + 关键词匹配检索器，返回 prompt 可注入片段。
+  - `data/cantonese.json`: 粤语词汇对照表（40+ 条目）。
+  - `data/sichuanese.json`: 四川话词汇对照表（40+ 条目）。
+  - `data/hokkien.json`: 闽南话词汇对照表（40+ 条目）。
 - `app/storage.py`: 上传文件、输出文件、元数据、音色缓存和运行时清理。
-- `static/`: 单页前端，包含移动端录音、手机系统录音器兜底、上传、提交、结果展示和已注册音色的继续合成入口。
-- `scripts/deploy_tencent_cloud_tar.sh`: 推荐部署脚本，在 WSL/Ubuntu 或 Linux 中用 tar + ssh 部署到腾讯云。
-- `scripts/deploy_tencent_cloud.ps1`: PowerShell 备用部署脚本，不作为首选部署方式。
-- `tests/`: 单元测试，覆盖主链路、缓存清理、移动端音频扩展名识别和 TTS 指令拼接。
-- `docs/`: 项目计划、执行记录和技术文档。
+- `app/audio_utils.py`: 音频预览、时长检测、移动端格式兼容和错误识别。
+- `static/`: 单页前端。
+- `scripts/deploy_tencent_cloud_tar.sh`: 推荐部署脚本。
+- `scripts/deploy_tencent_cloud.ps1`: PowerShell 备用部署脚本。
+- `tests/`: 单元测试。
+- `docs/`: 技术文档与执行记录。
 - `runtime_data/`: 本地/服务器运行时数据目录，已被 `.gitignore` 排除。
 
-## 移动端录音链路
+## 当前真实语音链路
 
-1. HTTPS 或支持安全上下文的浏览器优先使用 `navigator.mediaDevices.getUserMedia` + `MediaRecorder` 网页内录音。
-2. 前端通过 `MediaRecorder.isTypeSupported()` 自动选择 `audio/mp4`、`audio/webm`、`audio/ogg` 等可用格式，避免固定 `audio/webm` 导致 iOS/部分安卓失败。
-3. 手机 HTTP 页面或浏览器不支持网页内录音时，自动调用 `<input type="file" accept="audio/*" capture="microphone">` 打开系统录音器。
-4. 录音完成返回页面后，前端把文件保存到同一个 `selectedFile` 状态，并直接用 `FormData` 作为 `audio` 字段发送到 `/api/convert`。
-5. 后端允许 `.m4a`、`.mp4`、`.3gp`、`.3gpp`、`.caf`、`.amr`、`.webm`、`.wav`、`.mp3` 等移动端常见音频格式。
+1. 前端提交 `audio` 和 `dialect`（`cantonese`、`sichuanese`、`hokkien`）。
+2. 后端保存上传文件。
+3. `transcribe_audio` 调用 DashScope Paraformer `paraformer-v2` 得到原始 ASR 文本。
+4. `analyze_expression` 用 Qwen LLM 恢复标点，生成 `emotion_label` 与 `prosody_instruction`。
+5. **`retrieve_dialect_knowledge` 用 jieba 分词检索方言知识库，生成 RAG 上下文片段。**
+6. **`rewrite_to_dialect` 接收 RAG 上下文，在 prompt 中注入方言词汇参考后生成自然方言文本。**
+7. `build_tts_instruction` 合并官方方言指令和短情绪语调。
+8. `synthesize`（Gold Teacher）使用 `cosyvoice-v3-plus` + 系统音色 `longanyang` 生成系统音色方言音频。
+9. `enroll_voice` 使用参考音频调用 CosyVoice voice-enrollment 注册音色；相同参考音频 + 相同 target_model 命中缓存则复用。
+10. `synthesize`（Voice Matched）使用注册的 `voice_id` + `cosyvoice-v3.5-plus` 生成用户音色方言音频。
+11. `recommended_audio_url` 优先使用 Voice Matched；失败回退 Gold Teacher。
+12. 前端展示结果；Voice Matched 成功后可复用 `voice_id` 继续合成。
 
-## 语音链路
+## 当前模型与接口配置
 
-1. 前端提交 `audio` 和 `dialect`。
-2. 后端保存上传文件到 `runtime_data/uploads/{job_id}.{ext}`。
-3. `transcribe_audio` 调用 DashScope Paraformer 得到原始 ASR 文本。
-4. `analyze_expression` 用 Qwen LLM 恢复标点，并生成 `emotion_label` 与短 `prosody_instruction`。
-5. `rewrite_to_dialect` 用带标点文本和情绪提示生成自然方言文本。
-6. `build_tts_instruction` 合并官方方言指令和短情绪语调，例如“请用广东话表达，语气焦急，停顿更短。”。
-7. `enroll_voice` 注册或复用音色缓存。
-8. `synthesize` 使用 CosyVoice 复刻音色生成方言语音。
-9. 前端展示 `source_text`、`emotion_label`、`prosody_instruction`、`dialect_text` 和音频。
-10. 当 Voice Matched 成功并返回 `voice_id` 后，前端显示可拖动的像素风小吉祥物入口；用户点击后打开文本输入弹窗，继续使用已注册音色进行 LLM 情绪语调处理和合成。
+### LLM（方言改写 + 情绪分析）
+
+| 配置项 | 值 | 说明 |
+|--------|-----|------|
+| `QWEN_LLM_MODEL` | `qwen3-max` | 最强稳定版。旧 `qwen-plus`/`qwen-max` 将于 2026-07-13 下线 |
+| `QWEN_LLM_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | OpenAI 兼容端点 |
+| `QWEN_LLM_API_KEY` | 为空时回退 `DASHSCOPE_API_KEY` | 支持单独管理 |
+
+备选模型：
+- `qwen3.6-plus`：成本/效果均衡，日常改写可降级使用
+- `qwen3.7-max`：2026-05-21 发布，Agent 时代旗舰，1M 上下文
+
+### ASR
+
+| 配置项 | 值 |
+|--------|-----|
+| `ASR_MODEL` | `paraformer-v2` |
+
+### TTS — Gold Teacher（系统音色）
+
+| 配置项 | 值 | 说明 |
+|--------|-----|------|
+| `QWEN_TTS_MODEL` | `cosyvoice-v3-plus` | 保留系统音色 + instruction 控制 |
+| `QWEN_TTS_VOICE` | `longanyang` | 系统内置音色 |
+
+### TTS — Voice Matched（用户音色复刻）
+
+| 配置项 | 值 | 说明 |
+|--------|-----|------|
+| `QWEN_VOICE_TARGET_MODEL` | `cosyvoice-v3.5-plus` | **最强音色复刻模型，仅北京地域可用，无系统音色** |
+| `QWEN_VOICE_ENROLLMENT_MODEL` | `voice-enrollment` | 音色注册 |
+| `QWEN_VOICE_ENROLLMENT_URL` | DashScope customization URL | |
+
+### 模型选择依据
+
+- **Gold Teacher 用 v3-plus**：需要系统音色 `longanyang` 作为兜底输出。v3.5-plus 不支持系统音色。
+- **Voice Matched 用 v3.5-plus**：音色复刻效果最强，支持 17+ 方言、指令控制（语速/情绪/风格）。
+- **LLM 用 qwen3-max**：方言改写是质量瓶颈，用最强 LLM 提升准确率。
+
+## RAG 方言语义增强
+
+### 定位
+
+在 ASR 之后、LLM 方言改写之前，检索方言知识库，将匹配到的方言词汇/习惯表达注入 LLM prompt，提升方言改写的准确性和地道感。
+
+```
+ASR → analyze_expression → retrieve_dialect_knowledge → rewrite_to_dialect(rag_context=...) → TTS
+```
+
+### 检索原理
+
+1. `jieba` 对 ASR 原文分词
+2. 每个 token 与知识库 JSON 的 `keyword` 字段做双向子串匹配
+3. 按匹配数排序，返回 Top-5
+4. 格式化为 prompt snippet：`「年轻人」→ 后生仔（口语常用，含亲切感）`
+5. 注入到 `rewrite_to_dialect` 的 system prompt 中
+
+### 知识库文件
+
+每种方言一个 JSON 文件，格式：
+```json
+{"keyword": "年轻人", "dialect_expression": "后生仔", "category": "人称",
+ "usage_note": "口语常用，含亲切感", "context": "泛指年轻一代"}
+```
+
+当前每种方言 ~40 条种子数据，持续扩充中。详细方案见 `docs/RAG方言语义增强实现方案.md`。
+
+## 方言知识图谱（后续计划）
+
+在 RAG 词 ↔ 词对照基础上，构建结构化的方言语义图谱：
+
+- **概念层**：方言特有概念（如粤语「畀」= 让/给）
+- **关系层**：同义、上下位、语用语境、情感色彩
+- **候选工具**：Neo4j / NetworkX / Apache Jena
+- **数据来源**：方言田野调查、影视字幕、社交媒体语料
+
+详见 `docs/RAG方言语义增强实现方案.md` 的「方言知识图谱 — 后续计划」节。
+
+## 运行时与缓存
+
+- 真实转换必须配置 `DASHSCOPE_API_KEY` 和公网可回拉的 `PUBLIC_BASE_URL`。
+- `runtime_data/uploads` / `outputs` / `jobs` / `voice_cache`。
+- `cleanup_runtime`、`CLEANUP_AFTER_HOURS`、`VOICE_CACHE_TTL_HOURS` 控制磁盘增长。
+- `ENABLE_MOCK_WHEN_NO_KEY=1` 只用于无密钥本地演示或测试。
 
 ## 部署约定
 
-优先使用 WSL/Ubuntu 或 Linux 执行部署，避免 PowerShell 在中文路径、ZIP 打包、UTF-8、远端 Linux 文件名上的不稳定问题。
-
-推荐命令：
+优先使用 WSL/Ubuntu 或 Linux 部署：
 
 ```bash
 cd /mnt/d/dialect\ convert
@@ -58,24 +145,18 @@ curl -s http://43.139.53.84/health
 ssh -i ~/.ssh/dialectconvert_key.pem root@43.139.53.84 "systemctl is-active dialect-convert"
 ```
 
-## 环境配置
-
-- 真实转换必须配置 `DASHSCOPE_API_KEY` 和公网可回拉的 `PUBLIC_BASE_URL`，否则 ASR 和音色注册无法从云端读取上传音频。
-- `QWEN_LLM_API_KEY` 可单独配置；为空时当前代码会回退使用 `DASHSCOPE_API_KEY`。
-- 默认模型：ASR 为 `paraformer-v2`，LLM 为 `qwen-plus`，TTS 和音色复刻目标模型为 `cosyvoice-v3-flash`，音色注册模型为 `voice-enrollment`。
-- 运行时限制主要由 `MAX_UPLOAD_MB`、`CLEANUP_AFTER_HOURS`、`VOICE_CACHE_TTL_HOURS`、`API_REQUEST_TIMEOUT_S`、`API_MAX_RETRIES`、`SPEAKER_REF_AUDIO_MIN_S`、`SPEAKER_REF_AUDIO_MAX_S` 控制。
-- `ENABLE_MOCK_WHEN_NO_KEY=1` 只用于无密钥本地演示或测试，不会产生真实云端合成音频。
-- `.env.example` 是可提交的无密钥配置模板；`.env` 和 `.env.*` 必须继续忽略。
+`/health` 的静态资源字段应为 `true`。
 
 ## 安全约束
 
 - 不提交 `.env`、私钥、API key、上传音频、输出音频和运行缓存。
 - 不在日志、文档或提交信息中暴露密钥内容。
-- 50G 服务器必须依赖 `cleanup_runtime`、`CLEANUP_AFTER_HOURS` 和音色缓存 TTL 控制磁盘增长。
-- CosyVoice `instruction` 保持短句，避免超长指令影响方言输出或触发接口限制。
+- `voice_id` 是可复用音色标识，不应作为公开示例写入仓库。
+- CosyVoice `instruction` 保持短句（≤95 字符），避免超长指令影响方言输出或触发接口限制。
 
 ## 文档维护
 
-- `README.md` 是 GitHub 首页展示入口，需保持项目定位、模型清单、主链路、本地运行、部署方式和旧本地链路经验同步。
-- 修改 `app/config.py` 中的默认模型、接口地址或关键环境变量后，必须同步检查 `README.md` 和 `.env.example`。
-- 旧工作区 `D:\Competition` 的本地链路经验只作为历史参考，不应让 GitHub README 依赖本机绝对路径才能读懂项目。
+- `README.md` 是 GitHub 首页展示入口。
+- 修改 `app/config.py` 中的默认模型或环境变量后，必须同步更新 `README.md`、`.env.example`、`.env.prod.example` 和本文件。
+- RAG 知识库新增条目后，标注来源（人工审校 / LLM 辅助），并在 `docs/RAG方言语义增强实现方案.md` 中更新条目统计。
+- 如果后续移除 Gold Teacher 兜底或引入音频格式迁移链路，必须同步修改 `app/pipeline.py`、`app/models.py`、`static/app.js`、测试和文档。

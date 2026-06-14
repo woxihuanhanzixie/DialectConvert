@@ -15,6 +15,37 @@ def test_audio_limits_are_exposed_to_frontend():
     assert response.json()["max_seconds"] >= response.json()["min_seconds"]
 
 
+def test_health_reports_static_assets_available():
+    response = TestClient(app).get("/health")
+
+    assert response.status_code == 200
+    configured = response.json()["configured"]
+    assert configured["static_index_html"] is True
+    assert configured["static_app_js"] is True
+    assert configured["static_styles_css"] is True
+
+
+def test_frontend_static_assets_are_served():
+    client = TestClient(app)
+
+    index_response = client.get("/")
+    app_js_response = client.get("/static/app.js")
+    styles_response = client.get("/static/styles.css")
+
+    assert index_response.status_code == 200
+    assert 'id="convertForm"' in index_response.text
+    assert "/static/app.js" in index_response.text
+    assert "/static/styles.css" in index_response.text
+
+    assert app_js_response.status_code == 200
+    assert 'document.querySelector("#convertForm")' in app_js_response.text
+    assert "form.addEventListener" in app_js_response.text
+
+    assert styles_response.status_code == 200
+    assert ".app-shell" in styles_response.text
+    assert ".primary" in styles_response.text
+
+
 def test_mobile_capture_content_types_are_supported():
     assert _is_supported_upload(SimpleNamespace(filename="recording.m4a", content_type="audio/mp4"))
     assert _is_supported_upload(SimpleNamespace(filename="recording.3gp", content_type="audio/3gpp"))

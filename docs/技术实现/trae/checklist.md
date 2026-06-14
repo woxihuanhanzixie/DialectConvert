@@ -1,3 +1,0 @@
-- [ ] Audio inputs are successfully converted to the target dialect (e.g., Cantonese) rather than remaining in Mandarin.
-- [ ] The system does not fail immediately on transient external API network errors, but retries successfully.
-- [ ] `deploy_to_cloud.ps1` script is created and properly references the `"C:\Users\34005\Downloads\dialectconvert_key.pem"` key file for SSH authentication.

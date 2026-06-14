@@ -51,7 +51,7 @@ class Settings:
     dashscope_api_key: str = _env("DASHSCOPE_API_KEY") or _env("QWEN_TTS_API_KEY")
     qwen_llm_api_key: str = _env("QWEN_LLM_API_KEY") or _env("DASHSCOPE_API_KEY") or _env("DEEPSEEK_API_KEY")
     qwen_llm_base_url: str = _env("QWEN_LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-    qwen_llm_model: str = _env("QWEN_LLM_MODEL", "qwen-plus")
+    qwen_llm_model: str = _env("QWEN_LLM_MODEL", "qwen3-max")
 
     asr_provider: str = _env("ASR_PROVIDER", "dashscope_paraformer")
     asr_model: str = _env("ASR_MODEL", "paraformer-v2")
@@ -59,12 +59,16 @@ class Settings:
 
     tts_provider: str = _env("TTS_PROVIDER", "dashscope_cosyvoice")
     qwen_tts_base_url: str = _env("QWEN_TTS_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-    qwen_tts_model: str = _env("QWEN_TTS_MODEL", "cosyvoice-v3-flash")
+    # Gold Teacher TTS: cosyvoice-v3-plus retains system-voice support ("longanyang")
+    # plus instruction-based dialect / emotion control.
+    qwen_tts_model: str = _env("QWEN_TTS_MODEL", "cosyvoice-v3-plus")
     qwen_tts_voice: str = _env("QWEN_TTS_VOICE", "longanyang")
 
     voice_match_provider: str = _env("VOICE_MATCH_PROVIDER", "cosyvoice_clone")
     qwen_voice_enrollment_model: str = _env("QWEN_VOICE_ENROLLMENT_MODEL", "voice-enrollment")
-    qwen_voice_target_model: str = _env("QWEN_VOICE_TARGET_MODEL", "cosyvoice-v3-flash")
+    # Voice Matched TTS: cosyvoice-v3.5-plus is the strongest voice-cloning model
+    # (Beijing region only; does NOT ship system voices — use cloned voice_id only).
+    qwen_voice_target_model: str = _env("QWEN_VOICE_TARGET_MODEL", "cosyvoice-v3.5-plus")
     qwen_voice_enrollment_url: str = _env(
         "QWEN_VOICE_ENROLLMENT_URL",
         "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization",

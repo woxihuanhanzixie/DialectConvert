@@ -4,4 +4,5 @@ python-dotenv>=1.0
 python-multipart>=0.0.9
 requests>=2.31
 pydantic>=2.6
+jieba>=0.42
 
