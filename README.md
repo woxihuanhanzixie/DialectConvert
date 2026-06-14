@@ -33,10 +33,10 @@
 | 环节 | 默认模型或服务 | 作用 |
 | --- | --- | --- |
 | ASR | DashScope `paraformer-v2` | 将上传音频转写为中文文本 |
-| LLM | DashScope OpenAI-compatible `qwen-plus` | 恢复标点、提取情绪语调、生成方言口语文本 |
-| 标准 TTS | DashScope CosyVoice `cosyvoice-v3-flash` | 生成系统音色的 Gold Teacher 方言音频 |
+| LLM | DashScope OpenAI-compatible `qwen3.7-max` | 恢复标点、提取情绪语调、生成方言口语文本 |
+| 标准 TTS | DashScope CosyVoice `cosyvoice-v3-plus` | 生成系统音色的 Gold Teacher 方言音频 |
 | 音色注册 | DashScope `voice-enrollment` | 根据 10-20 秒参考音频创建或复用 `voice_id` |
-| 音色复刻 TTS | DashScope CosyVoice `cosyvoice-v3-flash` | 使用已注册音色生成 Voice Matched 方言音频 |
+| 音色复刻 TTS | DashScope CosyVoice `cosyvoice-v3.5-plus` | 使用已注册音色生成 Voice Matched 方言音频 |
 | 方言控制 | CosyVoice `instruction` | 使用“请用广东话/四川话/闽南话表达”等短指令控制发音 |
 
 关键配置位于 [app/config.py](app/config.py)，可通过 `.env` 覆盖模型名、接口地址、运行端口、缓存目录和清理策略。
@@ -48,7 +48,8 @@ flowchart TD
     A[用户录制或上传参考音频] --> B[保存到 runtime_data/uploads]
     B --> C[DashScope Paraformer ASR]
     C --> D[Qwen 标点恢复与情绪语调分析]
-    D --> E[Qwen 方言口语化改写]
+    D --> R[RAG 检索方言知识]
+    R --> E[Qwen 方言口语化改写]
     E --> F[构造 CosyVoice 短 instruction]
     B --> G[voice-enrollment 注册或读取音色缓存]
     E --> H[Gold Teacher 系统音色合成]
@@ -67,11 +68,12 @@ flowchart TD
 2. 保存上传音频，并检查参考音频时长。
 3. 调用 `transcribe_audio` 得到原始 ASR 文本。
 4. 调用 `analyze_expression` 恢复标点、生成 `emotion_label` 和 `prosody_instruction`。
-5. 调用 `rewrite_to_dialect` 生成目标方言口语文本。
-6. 调用 `build_tts_instruction` 合并方言指令和情绪语调，例如“请用广东话表达，语气焦急，停顿更短。”。
-7. 先生成 Gold Teacher，再注册或复用用户音色。
-8. 使用同一段方言文本和同一条短指令合成 Voice Matched。
-9. 前端优先推荐 Voice Matched；失败时保留 Gold Teacher 并展示警告。
+5. 调用 RAG 检索方言词汇/习惯表达，作为改写 prompt 的参考上下文。
+6. 调用 `rewrite_to_dialect` 生成目标方言口语文本。
+7. 调用 `build_tts_instruction` 合并方言指令和情绪语调，例如“请用广东话表达，语气焦急，停顿更短。”。
+8. 先生成 Gold Teacher，再注册或复用用户音色。
+9. 使用同一段方言文本和同一条短指令合成 Voice Matched。
+10. 前端优先推荐 Voice Matched；失败时保留 Gold Teacher 并展示警告。
 
 ## 旧本地链路与失败经验
 
@@ -163,18 +165,18 @@ PUBLIC_BASE_URL=http://你的公网地址或可被 DashScope 回拉的地址
 | `DASHSCOPE_API_KEY` | 必填 | 空 | DashScope ASR、CosyVoice TTS、音色注册的主要密钥 |
 | `QWEN_LLM_API_KEY` | 否 | 回退到 `DASHSCOPE_API_KEY` | Qwen LLM 的密钥；为空时会尝试使用 DashScope 密钥 |
 | `QWEN_LLM_BASE_URL` | 否 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Qwen OpenAI-compatible 接口地址 |
-| `QWEN_LLM_MODEL` | 否 | `qwen-plus` | 标点、情绪语调和方言改写使用的 LLM |
+| `QWEN_LLM_MODEL` | 否 | `qwen3.7-max` | 标点、情绪语调和方言改写使用的 LLM |
 | `ASR_PROVIDER` | 否 | `dashscope_paraformer` | ASR provider 标识 |
 | `ASR_MODEL` | 否 | `paraformer-v2` | DashScope Paraformer 模型名 |
 | `ASR_BASE_URL` | 否 | DashScope ASR transcription URL | ASR 任务提交地址 |
 | `DASHSCOPE_TASK_URL` | 否 | DashScope tasks URL | ASR 异步任务轮询地址 |
 | `TTS_PROVIDER` | 否 | `dashscope_cosyvoice` | TTS provider 标识 |
 | `QWEN_TTS_BASE_URL` | 否 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | TTS 配置入口；代码会转到 DashScope SpeechSynthesizer |
-| `QWEN_TTS_MODEL` | 否 | `cosyvoice-v3-flash` | Gold Teacher 系统音色合成模型 |
+| `QWEN_TTS_MODEL` | 否 | `cosyvoice-v3-plus` | Gold Teacher 系统音色合成模型 |
 | `QWEN_TTS_VOICE` | 否 | `longanyang` | Gold Teacher 默认系统音色 |
 | `VOICE_MATCH_PROVIDER` | 否 | `cosyvoice_clone` | Voice Matched provider 标识 |
 | `QWEN_VOICE_ENROLLMENT_MODEL` | 否 | `voice-enrollment` | 音色注册模型 |
-| `QWEN_VOICE_TARGET_MODEL` | 否 | `cosyvoice-v3-flash` | 注册音色后用于合成的目标模型，需和注册时一致 |
+| `QWEN_VOICE_TARGET_MODEL` | 否 | `cosyvoice-v3.5-plus` | 注册音色后用于合成的目标模型，需和注册时一致 |
 | `QWEN_VOICE_ENROLLMENT_URL` | 否 | DashScope customization URL | 音色注册接口地址 |
 | `QWEN_VOICE_CACHE_DIR` | 否 | `runtime_data/voice_cache` | 音色缓存目录 |
 | `MAX_UPLOAD_MB` | 否 | `30` | 上传音频大小限制 |

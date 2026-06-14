@@ -51,7 +51,7 @@ class Settings:
     dashscope_api_key: str = _env("DASHSCOPE_API_KEY") or _env("QWEN_TTS_API_KEY")
     qwen_llm_api_key: str = _env("QWEN_LLM_API_KEY") or _env("DASHSCOPE_API_KEY") or _env("DEEPSEEK_API_KEY")
     qwen_llm_base_url: str = _env("QWEN_LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-    qwen_llm_model: str = _env("QWEN_LLM_MODEL", "qwen3-max")
+    qwen_llm_model: str = _env("QWEN_LLM_MODEL", "qwen3.7-max")
 
     asr_provider: str = _env("ASR_PROVIDER", "dashscope_paraformer")
     asr_model: str = _env("ASR_MODEL", "paraformer-v2")

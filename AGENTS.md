@@ -48,13 +48,13 @@
 
 | 配置项 | 值 | 说明 |
 |--------|-----|------|
-| `QWEN_LLM_MODEL` | `qwen3-max` | 最强稳定版。旧 `qwen-plus`/`qwen-max` 将于 2026-07-13 下线 |
+| `QWEN_LLM_MODEL` | `qwen3.7-max` | 当前新旗舰。旧 `qwen-plus`/`qwen-max` 将于 2026-07-13 下线 |
 | `QWEN_LLM_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | OpenAI 兼容端点 |
 | `QWEN_LLM_API_KEY` | 为空时回退 `DASHSCOPE_API_KEY` | 支持单独管理 |
 
 备选模型：
 - `qwen3.6-plus`：成本/效果均衡，日常改写可降级使用
-- `qwen3.7-max`：2026-05-21 发布，Agent 时代旗舰，1M 上下文
+- `qwen3-max`：上一代 Max，稳定但不再作为默认首选
 
 ### ASR
 
@@ -81,7 +81,7 @@
 
 - **Gold Teacher 用 v3-plus**：需要系统音色 `longanyang` 作为兜底输出。v3.5-plus 不支持系统音色。
 - **Voice Matched 用 v3.5-plus**：音色复刻效果最强，支持 17+ 方言、指令控制（语速/情绪/风格）。
-- **LLM 用 qwen3-max**：方言改写是质量瓶颈，用最强 LLM 提升准确率。
+- **LLM 用 qwen3.7-max**：方言改写是质量瓶颈，用最新 Max 系列提升准确率与长上下文余量。
 
 ## RAG 方言语义增强
 
