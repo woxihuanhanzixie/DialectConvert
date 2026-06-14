@@ -75,12 +75,13 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
     voice_id = None
 
     try:
+        # cosyvoice-v3-plus does NOT support the "instruction" parameter;
+        # dialect pronunciation is carried by the dialect text itself.
         gold_audio_url = synthesize(
             synthesis_text,
             local_output_path(job_id, "gold"),
             voice=settings.qwen_tts_voice,
             model=settings.qwen_tts_model,
-            instruction=tts_instruction,
             language_hint=tts_control["language_hint"],
         )
     except ProviderError as exc:
