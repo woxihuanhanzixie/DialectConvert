@@ -1,16 +1,21 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+
 :root {
   color-scheme: dark;
   --ink: #f7fbff;
   --muted: #a7b3c2;
   --soft: #d4e0ee;
-  --line: rgba(255, 255, 255, 0.16);
-  --panel: rgba(21, 28, 40, 0.88);
-  --panel-strong: rgba(12, 17, 25, 0.96);
+  --line: rgba(255, 255, 255, 0.14);
+  --line-strong: rgba(255, 255, 255, 0.22);
+  --panel: rgba(21, 28, 40, 0.82);
+  --panel-strong: rgba(12, 17, 25, 0.94);
   --accent: #7dd3fc;
   --accent-2: #34d399;
   --accent-3: #f9c74f;
   --danger: #ef4444;
   --shadow: 0 18px 54px rgba(0, 0, 0, 0.28);
+  --radius: 12px;
+  --radius-sm: 8px;
 }
 
 * {
@@ -30,10 +35,13 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--ink);
-  font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-family: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-weight: 400;
   background:
-    radial-gradient(circle at 50% 110%, rgba(52, 211, 153, 0.22), transparent 28%),
+    radial-gradient(ellipse at 50% 120%, rgba(52, 211, 153, 0.18), transparent 34%),
+    radial-gradient(ellipse at 20% 20%, rgba(125, 211, 252, 0.10), transparent 30%),
     linear-gradient(180deg, #0b0f16 0%, #151c28 68%, #223248 155%);
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -108,12 +116,15 @@ h1 {
   min-height: 38px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
   color: var(--soft);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   font-size: 13px;
   font-weight: 700;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: color 0.3s ease, border-color 0.3s ease;
 }
 
 .studio {
@@ -130,10 +141,12 @@ h1 {
 .culture-panel {
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  transition: border-color 0.24s ease, box-shadow 0.24s ease;
 }
 
 .live-card {
@@ -404,10 +417,17 @@ audio {
 
 .value-grid article {
   min-height: 112px;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.07);
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.05);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.value-grid article:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
 }
 
 .value-grid strong,
@@ -433,16 +453,23 @@ audio {
   place-items: center;
   gap: 3px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: #071016;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   box-shadow: 0 16px 44px rgba(45, 212, 191, 0.22);
   font-weight: 800;
-  transition: transform 140ms ease, filter 140ms ease;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease;
 }
 
 .primary:hover {
-  filter: brightness(1.05);
+  filter: brightness(1.06);
+  box-shadow: 0 20px 52px rgba(45, 212, 191, 0.28);
+}
+
+.primary:active {
+  filter: brightness(0.96);
 }
 
 .primary small {
@@ -455,35 +482,52 @@ audio {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 9px;
+  gap: 8px;
   list-style: none;
   counter-reset: step;
 }
 
 .steps li {
-  min-height: 42px;
+  min-height: 44px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--muted);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .steps li::before {
   counter-increment: step;
   content: counter(step);
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
   border-radius: 50%;
   color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
 }
 
 .steps li.is-active {
   color: var(--accent);
+  border-color: rgba(125, 211, 252, 0.18);
+  background: rgba(125, 211, 252, 0.07);
+}
+
+.steps li.is-active::before {
+  border-color: rgba(125, 211, 252, 0.55);
+  color: var(--accent);
+  background: rgba(125, 211, 252, 0.14);
+  animation: stepPulse 1.4s ease-in-out infinite;
 }
 
 .steps li.is-done {
@@ -492,8 +536,14 @@ audio {
 
 .steps li.is-done::before {
   content: "✓";
-  border-color: rgba(52, 211, 153, 0.65);
+  border-color: rgba(52, 211, 153, 0.55);
   color: var(--accent-2);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+@keyframes stepPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(125, 211, 252, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(125, 211, 252, 0); }
 }
 
 .qr-card {
@@ -549,9 +599,22 @@ audio {
   min-height: 160px;
   display: grid;
   align-content: center;
-  gap: 8px;
+  justify-items: center;
+  gap: 10px;
   color: var(--muted);
   text-align: center;
+  padding: 24px;
+}
+
+.empty-state::before {
+  content: "🎙️";
+  font-size: 48px;
+  margin-bottom: 6px;
+  opacity: 0.7;
+}
+
+.empty-state.is-loading::before {
+  content: none;
 }
 
 .empty-state p {
@@ -562,7 +625,23 @@ audio {
 }
 
 .empty-state span {
-  line-height: 1.6;
+  max-width: 380px;
+  line-height: 1.65;
+}
+
+/* Skeleton / loading spinner */
+.skeleton-spinner {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 8px;
+  border: 3px solid rgba(125, 211, 252, 0.18);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .result-head {
@@ -672,11 +751,25 @@ audio {
   line-height: 1.55;
 }
 
+/* Accessible focus outlines */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .round-button,
   .chip-delete,
-  .primary {
-    transition: none;
+  .primary,
+  .value-grid article,
+  .steps li,
+  .steps li::before,
+  .skeleton-spinner {
+    transition: none !important;
+    animation: none !important;
   }
 }
 

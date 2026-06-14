@@ -25,7 +25,7 @@ def test_convert_audio_prefers_voice_matched(monkeypatch, tmp_path):
     monkeypatch.setattr(
         pipeline,
         "rewrite_to_dialect",
-        lambda text, dialect, expression=None: {
+        lambda text, dialect, expression=None, rag_context="": {
             "dialect_text": dialect_text,
             "pronunciation_note": "\u81ea\u7136\u5ddd\u6e1d\u53e3\u8bed",
         },
@@ -92,7 +92,7 @@ def test_convert_audio_translates_audio_short_warning(monkeypatch, tmp_path):
     monkeypatch.setattr(
         pipeline,
         "rewrite_to_dialect",
-        lambda text, dialect, expression=None: {"dialect_text": "\u4f60\u597d\u3002", "pronunciation_note": ""},
+        lambda text, dialect, expression=None, rag_context="": {"dialect_text": "\u4f60\u597d\u3002", "pronunciation_note": ""},
     )
     monkeypatch.setattr(pipeline, "voice_cache_key", lambda path, model: "cache")
     monkeypatch.setattr(pipeline, "read_voice_cache", lambda key: None)
@@ -127,7 +127,7 @@ def test_speak_with_registered_voice_uses_existing_voice(monkeypatch):
     monkeypatch.setattr(
         pipeline,
         "rewrite_to_dialect",
-        lambda text, dialect, expression=None: {"dialect_text": "\u4eca\u665a\u8bb0\u5f97\u8fd4\u5c4b\u4f01\u98df\u996d\u3002", "pronunciation_note": ""},
+        lambda text, dialect, expression=None, rag_context="": {"dialect_text": "\u4eca\u665a\u8bb0\u5f97\u8fd4\u5c4b\u4f01\u98df\u996d\u3002", "pronunciation_note": ""},
     )
 
     def fake_synth(text, output_path, *, voice, model=None, instruction=None, language_hint="zh"):

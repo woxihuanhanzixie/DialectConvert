@@ -281,6 +281,15 @@ function stopTimer() {
 }
 
 function renderMessage(message, level = "empty") {
+  if (level === "loading") {
+    result.innerHTML = `
+      <div class="empty-state is-loading">
+        <div class="skeleton-spinner"></div>
+        <p>${escapeHtml(message)}</p>
+        <span>请在生成过程中保持页面打开</span>
+      </div>`;
+    return;
+  }
   result.innerHTML = `<div class="${level === "warn" ? "warn-card" : "empty-state"}"><p>${escapeHtml(message)}</p></div>`;
 }
 
@@ -854,9 +863,9 @@ form.addEventListener("submit", async (event) => {
   }
 
   submitBtn.disabled = true;
-  submitBtn.querySelector("span").textContent = "正在生成";
+  submitBtn.querySelector("span").textContent = "正在生成…";
   serviceState.textContent = "Processing";
-  renderMessage("正在识别、方言化和复刻音色，请保持页面打开。");
+  renderMessage("正在识别、方言化和复刻音色，请保持页面打开。", "loading");
   setStep(0);
 
   const progress = [1, 2, 3];
