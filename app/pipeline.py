@@ -74,18 +74,9 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
     voice_matched_audio_url = None
     voice_id = None
 
-    try:
-        # cosyvoice-v3-plus does NOT support the "instruction" parameter;
-        # dialect pronunciation is carried by the dialect text itself.
-        gold_audio_url = synthesize(
-            synthesis_text,
-            local_output_path(job_id, "gold"),
-            voice=settings.qwen_tts_voice,
-            model=settings.qwen_tts_model,
-            language_hint=tts_control["language_hint"],
-        )
-    except ProviderError as exc:
-        warnings.append(f"Gold Teacher synthesis failed: {exc}")
+    # Gold Teacher has been retired — the instruction parameter is incompatible
+    # with cosyvoice-v3-plus, and system-voice output quality suffers without it.
+    # Voice Matched (cosyvoice-v3.5-plus + cloned voice_id) is the sole output.
 
     try:
         cache_key = voice_cache_key(audio_path, settings.qwen_voice_target_model)
@@ -113,9 +104,9 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
         if is_audio_too_short_error(exc):
             warnings.append("Voice Matched 克隆音色失败：服务器繁忙，请稍后再试")
         else:
-            warnings.append(f"Voice Matched cloned synthesis failed; kept Gold Teacher: {exc}")
+            warnings.append(f"Voice Matched 音色合成失败: {exc}")
 
-    recommended = voice_matched_audio_url or gold_audio_url
+    recommended = voice_matched_audio_url
     status = "ok" if recommended else "failed"
     return ConversionResult(
         job_id=job_id,

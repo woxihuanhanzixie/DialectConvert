@@ -684,7 +684,7 @@ function renderResult(data) {
   const visibleWarnings = (data.warnings || []).filter(
     (item) => !(data.voice_matched_audio_url && String(item).includes("Gold Teacher synthesis failed"))
   );
-  const warnings = visibleWarnings.map((item) => `<div class="warn-card">${escapeHtml(item)}</div>`).join("");
+  const warnings = visibleWarnings.map((item) => `<div class="warn-card"><p>${escapeHtml(item)}</p></div>`).join("");
   const dialectLabel = dialectNames[data.dialect] || "方言";
   state.registeredVoice =
     data.voice_id && data.voice_matched_audio_url
@@ -697,13 +697,12 @@ function renderResult(data) {
   if (state.registeredVoice) restoreMascotPosition();
   result.innerHTML = `
     <div class="result-head">
-      <p>生成完成</p>
+      <p>复刻完成</p>
       <h2>${dialectLabel}音色已就绪</h2>
       <span>任务 ${escapeHtml(data.job_id || "")}</span>
     </div>
     <div class="result-audio-grid">
-      ${renderAudioBlock("Voice Matched 克隆音色", data.voice_matched_audio_url, "matched", Boolean(data.voice_matched_audio_url))}
-      ${renderAudioBlock("Gold Teacher 标准方言", data.gold_audio_url, "gold", !data.voice_matched_audio_url)}
+      ${renderAudioBlock("我的克隆音色", data.voice_matched_audio_url, "matched", Boolean(data.voice_matched_audio_url))}
     </div>
     <div class="transcript-grid">
       <article>
@@ -726,6 +725,7 @@ function renderResult(data) {
       }
     </div>
     ${warnings}
+    ${state.registeredVoice ? '<div class="voice-continue"><strong>音色已保存</strong><span>点击右下角吉祥物，或用下方弹窗继续使用这个声音。</span></div>' : ""}
   `;
 }
 

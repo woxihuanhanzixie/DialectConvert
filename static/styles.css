@@ -2,20 +2,21 @@
 
 :root {
   color-scheme: dark;
-  --ink: #f7fbff;
-  --muted: #a7b3c2;
-  --soft: #d4e0ee;
-  --line: rgba(255, 255, 255, 0.14);
-  --line-strong: rgba(255, 255, 255, 0.22);
-  --panel: rgba(21, 28, 40, 0.82);
-  --panel-strong: rgba(12, 17, 25, 0.94);
-  --accent: #7dd3fc;
-  --accent-2: #34d399;
-  --accent-3: #f9c74f;
-  --danger: #ef4444;
-  --shadow: 0 18px 54px rgba(0, 0, 0, 0.28);
-  --radius: 12px;
-  --radius-sm: 8px;
+  --ink: #f0f4f0;
+  --muted: #96a89a;
+  --soft: #cddfd1;
+  --line: rgba(255, 255, 255, 0.10);
+  --line-strong: rgba(255, 255, 255, 0.18);
+  --panel: rgba(16, 22, 18, 0.85);
+  --panel-strong: rgba(9, 14, 10, 0.95);
+  --accent: #5eeadb;
+  --accent-2: #6bd98a;
+  --accent-3: #f0c060;
+  --danger: #e05555;
+  --warm: #e8b868;
+  --shadow: 0 18px 54px rgba(0, 0, 0, 0.32);
+  --radius: 14px;
+  --radius-sm: 10px;
 }
 
 * {
@@ -38,9 +39,10 @@ body {
   font-family: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-weight: 400;
   background:
-    radial-gradient(ellipse at 50% 120%, rgba(52, 211, 153, 0.18), transparent 34%),
-    radial-gradient(ellipse at 20% 20%, rgba(125, 211, 252, 0.10), transparent 30%),
-    linear-gradient(180deg, #0b0f16 0%, #151c28 68%, #223248 155%);
+    radial-gradient(ellipse at 50% 130%, rgba(107, 217, 138, 0.14), transparent 36%),
+    radial-gradient(ellipse at 80% 10%, rgba(94, 234, 219, 0.08), transparent 32%),
+    radial-gradient(ellipse at 15% 50%, rgba(76, 142, 110, 0.10), transparent 28%),
+    linear-gradient(175deg, #0a100d 0%, #0f1a13 45%, #152218 100%);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -87,14 +89,16 @@ button:disabled {
 }
 
 .brand-mark {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  color: #071016;
+  color: #071a10;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   font-weight: 900;
+  font-size: 20px;
+  box-shadow: 0 0 24px rgba(94, 234, 219, 0.18);
 }
 
 .eyebrow {
@@ -454,9 +458,9 @@ audio {
   gap: 3px;
   border: 0;
   border-radius: var(--radius);
-  color: #071016;
+  color: #071a10;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 16px 44px rgba(45, 212, 191, 0.22);
+  box-shadow: 0 16px 44px rgba(107, 217, 138, 0.18);
   font-weight: 800;
   font-size: 17px;
   letter-spacing: -0.01em;
@@ -465,7 +469,7 @@ audio {
 
 .primary:hover {
   filter: brightness(1.06);
-  box-shadow: 0 20px 52px rgba(45, 212, 191, 0.28);
+  box-shadow: 0 20px 52px rgba(107, 217, 138, 0.26);
 }
 
 .primary:active {
@@ -708,12 +712,9 @@ audio {
 }
 
 .audio-result.matched {
-  border-color: rgba(52, 211, 153, 0.42);
+  border-color: rgba(107, 217, 138, 0.44);
 }
 
-.audio-result.gold {
-  border-color: rgba(249, 199, 79, 0.36);
-}
 
 .transcript-grid {
   margin-top: 14px;
@@ -895,10 +896,20 @@ a:focus-visible {
   touch-action: none;
   user-select: none;
   filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.4));
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.voice-mascot:hover {
+  transform: translateY(-4px) scale(1.04);
 }
 
 .voice-mascot:active {
   cursor: grabbing;
+  transform: translateY(2px) scale(0.97);
+}
+
+.voice-mascot.is-dragging {
+  transition: none;
 }
 
 .voice-mascot.is-dragging .mascot-bubble {
@@ -906,262 +917,261 @@ a:focus-visible {
   transform: translateY(4px) scale(0.96);
 }
 
+/* ---- Bubble ---- */
 .mascot-bubble {
   position: absolute;
-  right: 82px;
-  bottom: 32px;
-  width: 168px;
+  right: 74px;
+  bottom: 36px;
+  width: 160px;
   padding: 9px 12px;
-  border: 1px solid rgba(125, 211, 252, 0.5);
-  border-radius: 8px;
+  border: 1px solid rgba(94, 234, 219, 0.35);
+  border-radius: 10px;
   color: var(--ink);
-  background: rgba(15, 31, 52, 0.96);
+  background: rgba(14, 30, 22, 0.96);
   font-size: 12px;
-  font-weight: 800;
-  line-height: 1.35;
-  box-shadow: inset 0 0 0 1px rgba(148, 209, 255, 0.1), 0 10px 24px rgba(0, 0, 0, 0.28);
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  font-weight: 700;
+  line-height: 1.4;
+  box-shadow: inset 0 0 0 1px rgba(107, 217, 138, 0.08), 0 10px 24px rgba(0, 0, 0, 0.32);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  animation: bubbleFloat 3s ease-in-out infinite;
 }
 
 .mascot-bubble::after {
   content: "";
   position: absolute;
-  right: -8px;
-  bottom: 18px;
-  width: 12px;
-  height: 12px;
-  border-top: 1px solid rgba(125, 211, 252, 0.5);
-  border-right: 1px solid rgba(125, 211, 252, 0.5);
-  background: rgba(15, 31, 52, 0.96);
+  right: -7px;
+  bottom: 16px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid rgba(94, 234, 219, 0.35);
+  border-right: 1px solid rgba(94, 234, 219, 0.35);
+  background: rgba(14, 30, 22, 0.96);
   transform: rotate(45deg);
 }
 
+@keyframes bubbleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* ---- Softer, cuter mascot body ---- */
 .mascot-pet {
   position: absolute;
-  right: 4px;
+  right: 6px;
   bottom: 0;
-  width: 90px;
-  height: 98px;
-  image-rendering: pixelated;
+  width: 84px;
+  height: 90px;
   transform-origin: center bottom;
-  animation: mascotIdle 2.8s steps(2, end) infinite;
+  animation: mascotBounce 2.4s ease-in-out infinite;
 }
 
+@keyframes mascotBounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  30% { transform: translateY(-6px) rotate(-1deg); }
+  60% { transform: translateY(-2px) rotate(1deg); }
+}
+
+/* ---- Head — rounder, friendlier ---- */
 .mascot-head {
   position: absolute;
-  left: 8px;
-  top: 35px;
-  width: 74px;
-  height: 58px;
-  border: 5px solid #6b4f2c;
-  border-radius: 16px;
-  background: #dfe7ad;
+  left: 6px;
+  top: 30px;
+  width: 72px;
+  height: 62px;
+  border: 5px solid #5a8140;
+  border-radius: 20px 20px 16px 16px;
+  background: linear-gradient(180deg, #e9f7c2 0%, #c9e68c 60%, #b5d97a 100%);
   box-shadow:
-    inset 0 0 0 4px #f2f4bf,
-    inset 0 -7px 0 rgba(90, 70, 42, 0.2);
+    inset 0 4px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -8px 0 rgba(90, 120, 50, 0.18);
 }
 
-.mascot-head::before,
-.mascot-head::after {
-  content: "";
-  position: absolute;
-  top: -4px;
-  width: 10px;
-  height: 10px;
-  background: #dfe7ad;
-  border-top: 5px solid #6b4f2c;
-}
-
-.mascot-head::before {
-  left: 2px;
-  border-left: 5px solid #6b4f2c;
-}
-
-.mascot-head::after {
-  right: 2px;
-  border-right: 5px solid #6b4f2c;
-}
-
-.mascot-screen {
-  position: absolute;
-  left: 9px;
-  top: 14px;
-  width: 46px;
-  height: 29px;
-  border: 3px solid #b38546;
-  border-radius: 8px;
-  background: #ffe7ba;
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.45);
-}
-
-.mascot-eye {
-  position: absolute;
-  top: 10px;
-  width: 6px;
-  height: 8px;
-  background: #142232;
-  border-radius: 1px;
-}
-
-.mascot-eye.left {
-  left: 9px;
-}
-
-.mascot-eye.right {
-  right: 9px;
-}
-
-.mascot-blush {
-  position: absolute;
-  top: 20px;
-  width: 10px;
-  height: 4px;
-  background: #ff9f9a;
-  opacity: 0.9;
-}
-
-.mascot-blush.left {
-  left: 4px;
-}
-
-.mascot-blush.right {
-  right: 4px;
-}
-
+/* ---- Ears — cat-like triangles ---- */
 .mascot-ear {
   position: absolute;
-  top: 55px;
-  width: 12px;
-  height: 27px;
-  border: 4px solid #6b4f2c;
-  background: #cdd99a;
+  top: 50px;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(180deg, #d4ea9f, #a8d06a);
+  border: 4px solid #5a8140;
+  border-radius: 10px 4px 10px 4px;
 }
 
 .mascot-ear.left {
-  left: 2px;
-  border-right: 0;
-  border-radius: 8px 0 0 8px;
+  left: 0;
+  border-radius: 10px 4px 10px 4px;
+  transform: rotate(-12deg);
 }
 
 .mascot-ear.right {
-  right: 2px;
-  border-left: 0;
-  border-radius: 0 8px 8px 0;
+  right: 0;
+  border-radius: 4px 10px 4px 10px;
+  transform: rotate(12deg);
 }
 
+/* ---- Screen / face area ---- */
+.mascot-screen {
+  position: absolute;
+  left: 8px;
+  top: 16px;
+  width: 46px;
+  height: 32px;
+  border: 3px solid #9fb870;
+  border-radius: 10px;
+  background: #faf7e0;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* ---- Eyes — big and cute ---- */
+.mascot-eye {
+  position: absolute;
+  top: 10px;
+  width: 7px;
+  height: 9px;
+  background: #142218;
+  border-radius: 50%;
+  animation: mascotBlink 4s ease-in-out infinite;
+}
+
+.mascot-eye.left { left: 9px; }
+.mascot-eye.right { right: 9px; }
+
+@keyframes mascotBlink {
+  0%, 45%, 55%, 100% { transform: scaleY(1); }
+  48%, 52% { transform: scaleY(0.15); }
+}
+
+/* ---- Rosy cheeks ---- */
+.mascot-blush {
+  position: absolute;
+  top: 19px;
+  width: 11px;
+  height: 6px;
+  background: #ffb8b0;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+.mascot-blush.left { left: 3px; }
+.mascot-blush.right { right: 3px; }
+
+/* ---- Sprout on head ---- */
 .mascot-sprout {
   position: absolute;
-  left: 42px;
-  top: 0;
-  width: 8px;
-  height: 34px;
-  background: #765d2e;
-  border-left: 3px solid #5a4727;
-  border-right: 3px solid #9b7937;
-  transform: rotate(-4deg);
+  left: 38px;
+  top: -2px;
+  width: 6px;
+  height: 36px;
+  background: #6d8a40;
+  border-radius: 3px;
+  transform: rotate(-3deg);
   transform-origin: bottom center;
+  animation: sproutSway 3s ease-in-out infinite;
+}
+
+@keyframes sproutSway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
 }
 
 .mascot-leaf {
   position: absolute;
-  top: 2px;
-  width: 31px;
-  height: 17px;
-  border: 4px solid #668447;
-  background: linear-gradient(180deg, #c4e562 0%, #91bd48 100%);
-  box-shadow: inset 0 -4px 0 rgba(83, 122, 44, 0.22);
+  top: 0;
+  width: 28px;
+  height: 18px;
+  border: 3px solid #5a9040;
+  background: linear-gradient(180deg, #a0e85a 0%, #7ac838 100%);
+  border-radius: 12px 3px 10px 2px;
+  box-shadow: inset 0 -3px 0 rgba(70, 110, 30, 0.18);
 }
 
 .mascot-leaf.left {
-  right: 4px;
-  border-radius: 14px 4px 12px 3px;
-  transform: rotate(15deg);
+  right: 2px;
+  transform: rotate(18deg);
 }
 
 .mascot-leaf.right {
-  left: 4px;
-  border-radius: 4px 14px 3px 12px;
-  transform: rotate(-10deg);
+  left: 2px;
+  border-radius: 3px 12px 2px 10px;
+  transform: rotate(-12deg);
 }
 
-.mascot-torso,
-.mascot-arm,
-.mascot-foot {
-  display: none;
-}
-
+/* ---- Body — visible now with a tiny badge ---- */
 .mascot-torso {
   position: absolute;
-  left: 29px;
-  top: 91px;
-  width: 45px;
-  height: 37px;
-  border: 5px solid #6b4f2c;
-  border-radius: 8px 8px 13px 13px;
-  background: #eef0b5;
-  box-shadow: inset 0 -6px 0 rgba(125, 102, 59, 0.16);
+  left: 22px;
+  top: 88px;
+  width: 42px;
+  height: 34px;
+  border: 4px solid #5a8140;
+  border-radius: 8px 8px 12px 12px;
+  background: linear-gradient(180deg, #e9f7c2, #c9e68c);
+  box-shadow: inset 0 -5px 0 rgba(90, 120, 50, 0.14);
 }
 
 .mascot-badge {
   position: absolute;
-  left: 15px;
-  top: 12px;
-  width: 14px;
-  height: 14px;
+  left: 13px;
+  top: 8px;
+  width: 16px;
+  height: 16px;
   background:
-    linear-gradient(#8fca3e, #8fca3e) 5px 0 / 4px 14px no-repeat,
-    linear-gradient(#8fca3e, #8fca3e) 0 5px / 14px 4px no-repeat;
+    linear-gradient(#7ac838, #7ac838) 6px 0 / 4px 16px no-repeat,
+    linear-gradient(#7ac838, #7ac838) 0 6px / 16px 4px no-repeat;
+  border-radius: 2px;
 }
 
+/* ---- Arms — small nubs ---- */
 .mascot-arm {
   position: absolute;
-  top: 98px;
-  width: 12px;
-  height: 25px;
-  border: 4px solid #6b4f2c;
-  background: #dfe7ad;
+  top: 96px;
+  width: 10px;
+  height: 22px;
+  border: 3px solid #5a8140;
+  background: #d4ea9f;
+  border-radius: 6px;
 }
 
 .mascot-arm.left {
-  left: 19px;
-  border-radius: 8px 4px 6px 8px;
-  transform: rotate(5deg);
+  left: 14px;
+  transform: rotate(8deg);
+  animation: armWaveLeft 2.8s ease-in-out infinite;
 }
 
 .mascot-arm.right {
-  right: 19px;
-  border-radius: 4px 8px 8px 6px;
-  transform: rotate(-5deg);
+  right: 14px;
+  transform: rotate(-8deg);
+  animation: armWaveRight 2.8s ease-in-out infinite;
 }
 
+@keyframes armWaveLeft {
+  0%, 100% { transform: rotate(8deg); }
+  50% { transform: rotate(2deg) translateY(-2px); }
+}
+
+@keyframes armWaveRight {
+  0%, 100% { transform: rotate(-8deg); }
+  50% { transform: rotate(-2deg) translateY(-2px); }
+}
+
+/* ---- Feet — cute little paws ---- */
 .mascot-foot {
   position: absolute;
   bottom: 0;
-  width: 18px;
-  height: 10px;
-  border: 4px solid #6b4f2c;
-  border-top: 0;
-  background: #cdd99a;
-}
-
-.mascot-foot.left {
-  left: 33px;
+  width: 16px;
+  height: 9px;
+  border: 3px solid #5a8140;
   border-radius: 0 0 6px 6px;
+  background: #b5d97a;
 }
 
-.mascot-foot.right {
-  right: 33px;
-  border-radius: 0 0 6px 6px;
-}
+.mascot-foot.left { left: 28px; }
+.mascot-foot.right { right: 28px; }
 
+/* ---- Idle jitter ---- */
 @keyframes mascotIdle {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-3px);
-  }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 
 @media (max-width: 940px) {
@@ -1294,14 +1304,53 @@ a:focus-visible {
   }
 
   .voice-mascot {
-    width: 106px;
-    height: 104px;
+    width: 98px;
+    height: 98px;
+    right: 8px;
+    bottom: max(10px, env(safe-area-inset-bottom));
   }
+
+  .mascot-pet {
+    width: 72px;
+    height: 78px;
+  }
+
+  .mascot-head {
+    width: 60px;
+    height: 52px;
+    left: 6px;
+    top: 26px;
+  }
+
+  .mascot-screen {
+    width: 38px;
+    height: 26px;
+    left: 7px;
+    top: 13px;
+  }
+
+  .mascot-eye { width: 6px; height: 8px; top: 8px; }
+  .mascot-eye.left { left: 7px; }
+  .mascot-eye.right { right: 7px; }
+  .mascot-blush { top: 16px; width: 9px; height: 5px; }
+  .mascot-blush.left { left: 2px; }
+  .mascot-blush.right { right: 2px; }
+  .mascot-ear { top: 42px; width: 16px; height: 16px; }
+  .mascot-sprout { left: 32px; top: -2px; height: 28px; width: 5px; }
+  .mascot-leaf { width: 22px; height: 14px; }
+  .mascot-torso { left: 18px; top: 74px; width: 34px; height: 28px; }
+  .mascot-badge { left: 9px; top: 6px; width: 14px; height: 14px; }
+  .mascot-arm { top: 80px; width: 8px; height: 18px; }
+  .mascot-arm.left { left: 12px; }
+  .mascot-arm.right { right: 12px; }
+  .mascot-foot { width: 14px; height: 8px; }
+  .mascot-foot.left { left: 24px; }
+  .mascot-foot.right { right: 24px; }
 
   .mascot-bubble {
     right: 0;
-    bottom: 92px;
-    width: 142px;
+    bottom: 80px;
+    width: 130px;
     font-size: 11px;
   }
 
@@ -1309,7 +1358,7 @@ a:focus-visible {
     right: 34px;
     bottom: -7px;
     border-top: 0;
-    border-left: 1px solid rgba(125, 211, 252, 0.5);
+    border-left: 1px solid rgba(94, 234, 219, 0.35);
   }
 
 }
