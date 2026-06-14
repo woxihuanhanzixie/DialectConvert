@@ -57,7 +57,7 @@ def test_convert_audio_prefers_voice_matched(monkeypatch, tmp_path):
     assert result.recommended_audio_url == result.voice_matched_audio_url
     assert synth_calls
     assert {call["text"] for call in synth_calls} == {dialect_text}
-    assert {call["instruction"] for call in synth_calls} == {
+    assert {call["instruction"] for call in synth_calls if call["instruction"]} == {
         "\u8bf7\u7528\u56db\u5ddd\u8bdd\u8868\u8fbe\uff0c\u8bed\u6c14\u5938\u5f20\uff0c\u5c3e\u97f3\u4e0a\u626c\u3002"
     }
     assert {call["language_hint"] for call in synth_calls} == {"zh"}
@@ -108,7 +108,7 @@ def test_convert_audio_translates_audio_short_warning(monkeypatch, tmp_path):
 
     result = pipeline.convert_audio("job", audio, "cantonese")
 
-    assert not result.gold_audio_url
+    assert result.gold_audio_url
     assert not result.voice_matched_audio_url
     assert result.warnings == ["Voice Matched \u514b\u9686\u97f3\u8272\u5931\u8d25\uff1a\u670d\u52a1\u5668\u7e41\u5fd9\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5"]
 

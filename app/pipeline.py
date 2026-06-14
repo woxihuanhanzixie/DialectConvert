@@ -25,18 +25,15 @@ from .storage import (
 
 DIALECT_TTS_CONTROLS = {
     "cantonese": {
-        # Store the official Chinese CosyVoice instructions as Unicode escapes
-        # so Windows consoles, ZIP packaging, and SSH sessions cannot corrupt
-        # them into mojibake before they reach DashScope.
-        "instruction": "\u8bf7\u7528\u5e7f\u4e1c\u8bdd\u8868\u8fbe\u3002",
+        "instruction": "请用广东话表达。",
         "language_hint": "zh",
     },
     "sichuanese": {
-        "instruction": "\u8bf7\u7528\u56db\u5ddd\u8bdd\u8868\u8fbe\u3002",
+        "instruction": "请用四川话表达。",
         "language_hint": "zh",
     },
     "hokkien": {
-        "instruction": "\u8bf7\u7528\u95fd\u5357\u8bdd\u8868\u8fbe\u3002",
+        "instruction": "请用闽南话表达。",
         "language_hint": "zh",
     },
 }
@@ -63,10 +60,6 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
     rewritten = rewrite_to_dialect(source_text, dialect, expression, rag_context=rag_context)
     dialect_text = rewritten["dialect_text"]
     tts_control = DIALECT_TTS_CONTROLS[dialect]
-    # Bind both content and pronunciation: the rewritten text carries dialect
-    # wording, and the official CosyVoice instruction carries dialect phonology.
-    # This avoids the old failure mode where dialect text was read with
-    # Mandarin pronunciation, or Mandarin text was only weakly re-expressed.
     synthesis_text = dialect_text
     tts_instruction = build_tts_instruction(dialect, expression["prosody_instruction"])
 
@@ -74,10 +67,20 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
     voice_matched_audio_url = None
     voice_id = None
 
-    # Gold Teacher has been retired — the instruction parameter is incompatible
-    # with cosyvoice-v3-plus, and system-voice output quality suffers without it.
-    # Voice Matched (cosyvoice-v3.5-plus + cloned voice_id) is the sole output.
+    # Gold Teacher: cosyvoice-v3-plus does NOT support the "instruction" parameter;
+    # dialect pronunciation is carried by the dialect text itself.
+    try:
+        gold_audio_url = synthesize(
+            synthesis_text,
+            local_output_path(job_id, "gold"),
+            voice=settings.qwen_tts_voice,
+            model=settings.qwen_tts_model,
+            language_hint=tts_control["language_hint"],
+        )
+    except ProviderError as exc:
+        warnings.append(f"Gold Teacher synthesis failed: {exc}")
 
+    # Voice Matched: cosyvoice-v3.5-plus + cloned voice_id with instruction.
     try:
         cache_key = voice_cache_key(audio_path, settings.qwen_voice_target_model)
         cached = read_voice_cache(cache_key)
@@ -104,9 +107,9 @@ def convert_audio(job_id: str, audio_path: Path, dialect: str) -> ConversionResu
         if is_audio_too_short_error(exc):
             warnings.append("Voice Matched 克隆音色失败：服务器繁忙，请稍后再试")
         else:
-            warnings.append(f"Voice Matched 音色合成失败: {exc}")
+            warnings.append(f"Voice Matched cloned synthesis failed; kept Gold Teacher: {exc}")
 
-    recommended = voice_matched_audio_url
+    recommended = voice_matched_audio_url or gold_audio_url
     status = "ok" if recommended else "failed"
     return ConversionResult(
         job_id=job_id,

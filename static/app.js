@@ -695,14 +695,17 @@ function renderResult(data) {
       : null;
   voiceMascot.hidden = !state.registeredVoice;
   if (state.registeredVoice) restoreMascotPosition();
+  // Only show Gold Teacher when Voice Matched failed — it's a fallback.
+  const showGold = !data.voice_matched_audio_url && data.gold_audio_url;
   result.innerHTML = `
     <div class="result-head">
-      <p>复刻完成</p>
+      <p>生成完成</p>
       <h2>${dialectLabel}音色已就绪</h2>
       <span>任务 ${escapeHtml(data.job_id || "")}</span>
     </div>
     <div class="result-audio-grid">
       ${renderAudioBlock("我的克隆音色", data.voice_matched_audio_url, "matched", Boolean(data.voice_matched_audio_url))}
+      ${showGold ? renderAudioBlock("备选方言音频", data.gold_audio_url, "gold", true) : ""}
     </div>
     <div class="transcript-grid">
       <article>
