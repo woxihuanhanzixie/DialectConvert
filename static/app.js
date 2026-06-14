@@ -181,38 +181,127 @@ function resetSteps() {
 
 function drawIdleWave() {
   const now = performance.now();
-  if (now - state.lastDrawAt < 80) {
+  if (now - state.lastDrawAt < 50) {
     state.animationId = requestAnimationFrame(drawIdleWave);
     return;
   }
   state.lastDrawAt = now;
   const width = waveCanvas.width;
   const height = waveCanvas.height;
-  state.demoPulse += 0.018;
+  state.demoPulse += 0.012;
   ctx.clearRect(0, 0, width, height);
-  const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "#0b1320");
-  gradient.addColorStop(0.62, "#12324f");
-  gradient.addColorStop(1, "#8fd3ff");
-  ctx.fillStyle = gradient;
+
+  // Forest floor gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+  bgGrad.addColorStop(0, "#0a1610");
+  bgGrad.addColorStop(0.55, "#0f2116");
+  bgGrad.addColorStop(1, "#183422");
+  ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, width, height);
 
-  const glow = ctx.createRadialGradient(width * 0.7, height * 0.92, 16, width * 0.7, height * 0.92, height * 0.78);
-  glow.addColorStop(0, "rgba(236, 253, 245, 0.78)");
-  glow.addColorStop(0.34, "rgba(125, 211, 252, 0.28)");
-  glow.addColorStop(1, "rgba(101, 153, 220, 0)");
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.strokeStyle = "rgba(190, 242, 255, 0.28)";
-  ctx.lineWidth = 2.5;
+  // Ground line
+  const groundY = height * 0.78;
+  ctx.strokeStyle = "rgba(107, 138, 90, 0.18)";
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  for (let x = 0; x <= width; x += 10) {
-    const y = height * 0.62 + Math.sin(x * 0.018 + state.demoPulse) * 8 + Math.sin(x * 0.043) * 3;
-    if (x === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  ctx.moveTo(0, groundY);
+  for (let x = 0; x <= width; x += 3) {
+    ctx.lineTo(x, groundY + Math.sin(x * 0.04 + state.demoPulse * 0.5) * 4);
   }
   ctx.stroke();
+
+  // Distant foliage haze
+  const hazeGrad = ctx.createRadialGradient(width * 0.68, groundY - 80, 20, width * 0.68, groundY - 40, height * 0.7);
+  hazeGrad.addColorStop(0, "rgba(107, 138, 90, 0.13)");
+  hazeGrad.addColorStop(0.5, "rgba(124, 200, 100, 0.06)");
+  hazeGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = hazeGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // --- Dialect tree sapling ---
+  const cx = width * 0.48;
+  const baseY = groundY + 6;
+  const sway = Math.sin(state.demoPulse * 1.4) * 1.2;
+
+  // Roots
+  ctx.strokeStyle = "rgba(107, 138, 90, 0.3)";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(cx, baseY);
+  ctx.quadraticCurveTo(cx - 18, baseY + 18, cx - 32, baseY + 24);
+  ctx.moveTo(cx, baseY);
+  ctx.quadraticCurveTo(cx + 16, baseY + 18, cx + 32, baseY + 22);
+  ctx.stroke();
+
+  // Trunk
+  const trunkGrad = ctx.createLinearGradient(cx, baseY, cx, baseY - 80);
+  trunkGrad.addColorStop(0, "#4a6a3a");
+  trunkGrad.addColorStop(0.5, "#6b8a50");
+  trunkGrad.addColorStop(1, "#8aaa6a");
+  ctx.strokeStyle = trunkGrad;
+  ctx.lineWidth = 5;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx, baseY);
+  ctx.lineTo(cx + sway, baseY - 60);
+  ctx.stroke();
+
+  // Main branches
+  ctx.lineWidth = 3;
+  const branchY = baseY - 38;
+  ctx.beginPath();
+  ctx.moveTo(cx + sway, branchY);
+  ctx.quadraticCurveTo(cx - 18 + sway, branchY - 14, cx - 34, branchY - 20);
+  ctx.moveTo(cx + sway, branchY);
+  ctx.quadraticCurveTo(cx + 22 + sway, branchY - 16, cx + 38, branchY - 24);
+  ctx.stroke();
+
+  // Upper branch
+  ctx.lineWidth = 2.2;
+  const topY = baseY - 50;
+  ctx.beginPath();
+  ctx.moveTo(cx + sway, topY);
+  ctx.quadraticCurveTo(cx - 10 + sway, topY - 10, cx - 22, topY - 16);
+  ctx.moveTo(cx + sway, topY);
+  ctx.quadraticCurveTo(cx + 14 + sway, topY - 8, cx + 26, topY - 18);
+  ctx.stroke();
+
+  // Leaf clusters (circles with glow)
+  const leaves = [
+    [cx - 34, branchY - 20, 12],
+    [cx + 38, branchY - 24, 11],
+    [cx - 22, topY - 16, 10],
+    [cx + 26, topY - 18, 9],
+    [cx + sway, topY - 22, 8],
+  ];
+  leaves.forEach(([lx, ly, r]) => {
+    const leafGrad = ctx.createRadialGradient(lx, ly, r * 0.2, lx, ly, r);
+    leafGrad.addColorStop(0, "rgba(168, 232, 140, 0.7)");
+    leafGrad.addColorStop(0.6, "rgba(124, 200, 100, 0.35)");
+    leafGrad.addColorStop(1, "rgba(80, 150, 60, 0)");
+    ctx.fillStyle = leafGrad;
+    ctx.beginPath();
+    ctx.arc(lx, ly, r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Floating leaf particles
+  for (let i = 0; i < 4; i++) {
+    const lx = cx - 40 + i * 22 + Math.sin(state.demoPulse * 2 + i) * 14;
+    const ly = baseY - 70 - i * 10 + Math.cos(state.demoPulse * 1.8 + i) * 8;
+    ctx.fillStyle = "rgba(124, 219, 106, 0.15)";
+    ctx.beginPath();
+    ctx.ellipse(lx, ly, 5, 2.5, Math.sin(state.demoPulse + i) * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Ground glow
+  const groundGlow = ctx.createRadialGradient(cx, baseY, 6, cx, baseY, 50);
+  groundGlow.addColorStop(0, "rgba(124, 219, 106, 0.1)");
+  groundGlow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = groundGlow;
+  ctx.fillRect(cx - 50, baseY - 30, 100, 50);
+
   state.animationId = requestAnimationFrame(drawIdleWave);
 }
 
