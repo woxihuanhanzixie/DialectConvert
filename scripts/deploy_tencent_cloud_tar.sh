@@ -135,8 +135,16 @@ systemctl enable dialect-convert
 systemctl restart dialect-convert
 nginx -t
 systemctl reload nginx
-systemctl --no-pager --full status dialect-convert
-grep -n "\\\\u8bf7\\\\u7528\\\\u5e7f\\\\u4e1c\\\\u8bdd\\\\u8868\\\\u8fbe" app/pipeline.py
+systemctl is-active --quiet dialect-convert
+for attempt in $(seq 1 20); do
+  if curl -fsS "http://127.0.0.1:$APP_PORT/health" >/dev/null; then
+    exit 0
+  fi
+  sleep 1
+done
+systemctl --no-pager --full status dialect-convert || true
+journalctl -u dialect-convert -n 80 --no-pager || true
+exit 1
 REMOTE
 
 echo "Deployment finished. Visit: $PUBLIC_BASE_URL"

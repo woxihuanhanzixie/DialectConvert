@@ -74,6 +74,7 @@
 | 配置项 | 值 | 说明 |
 |--------|-----|------|
 | `QWEN_VOICE_TARGET_MODEL` | `cosyvoice-v3.5-plus` | **最强音色复刻模型，仅北京地域可用，无系统音色** |
+| `QWEN_TTS_VC_MODEL` | `cosyvoice-v3.5-plus` | 兼容旧音色迁移配置；当前主链路使用 `QWEN_VOICE_TARGET_MODEL` |
 | `QWEN_VOICE_ENROLLMENT_MODEL` | `voice-enrollment` | 音色注册 |
 | `QWEN_VOICE_ENROLLMENT_URL` | DashScope customization URL | |
 

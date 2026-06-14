@@ -73,7 +73,7 @@ class Settings:
         "QWEN_VOICE_ENROLLMENT_URL",
         "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization",
     )
-    qwen_tts_vc_model: str = _env("QWEN_TTS_VC_MODEL", "cosyvoice-v3-flash")
+    qwen_tts_vc_model: str = _env("QWEN_TTS_VC_MODEL", "cosyvoice-v3.5-plus")
     dashscope_task_url: str = _env("DASHSCOPE_TASK_URL", "https://dashscope.aliyuncs.com/api/v1/tasks")
 
     data_dir: Path = ROOT_DIR / "runtime_data"

@@ -177,6 +177,7 @@ PUBLIC_BASE_URL=http://你的公网地址或可被 DashScope 回拉的地址
 | `VOICE_MATCH_PROVIDER` | 否 | `cosyvoice_clone` | Voice Matched provider 标识 |
 | `QWEN_VOICE_ENROLLMENT_MODEL` | 否 | `voice-enrollment` | 音色注册模型 |
 | `QWEN_VOICE_TARGET_MODEL` | 否 | `cosyvoice-v3.5-plus` | 注册音色后用于合成的目标模型，需和注册时一致 |
+| `QWEN_TTS_VC_MODEL` | 否 | `cosyvoice-v3.5-plus` | 兼容旧音色迁移配置；当前主链路使用 `QWEN_VOICE_TARGET_MODEL` |
 | `QWEN_VOICE_ENROLLMENT_URL` | 否 | DashScope customization URL | 音色注册接口地址 |
 | `QWEN_VOICE_CACHE_DIR` | 否 | `runtime_data/voice_cache` | 音色缓存目录 |
 | `MAX_UPLOAD_MB` | 否 | `30` | 上传音频大小限制 |
