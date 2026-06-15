@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from app.rag import GraphDialectFact, set_dialect_graph_provider
 from app.rag.retriever import retrieve_dialect_knowledge
 
 
@@ -27,3 +28,29 @@ def test_ai_unclear_demo_sentence_retrieves_dialect_context():
         context = retrieve_dialect_knowledge(source_text, dialect, top_k=5)
         assert "AI" in context
         assert "不清楚" in context or "有点" in context
+
+
+def test_optional_graph_provider_can_extend_rag_context():
+    class FakeGraphProvider:
+        def query(self, source_text, dialect, top_k=5):
+            assert source_text == "保护方言"
+            assert dialect == "cantonese"
+            return [
+                GraphDialectFact(
+                    source="方言保护",
+                    relation="has_goal",
+                    target="承传乡下话",
+                    note="文化传承语境",
+                )
+            ]
+
+    set_dialect_graph_provider(FakeGraphProvider())
+    try:
+        context = retrieve_dialect_knowledge("保护方言", "cantonese")
+    finally:
+        set_dialect_graph_provider(None)
+
+    assert "以下是该方言知识图谱的语义关系参考" in context
+    assert "方言保护" in context
+    assert "has_goal" in context
+    assert "承传乡下话" in context

@@ -13,6 +13,7 @@
 - `app/providers.py`: DashScope/Qwen/CosyVoice API 调用，包括 ASR、LLM 改写（含 RAG 上下文注入）、情绪标注、音色注册和语音合成。
 - `app/rag/`: **方言 RAG 语义增强模块**（详见「RAG 方言语义增强」节）。
   - `__init__.py`: 模块入口。
+  - `graph.py`: 方言知识图谱扩展接口，默认无 provider；后续 Neo4j/NetworkX/RDF 可通过 `set_dialect_graph_provider()` 注入。
   - `knowledge_base.py`: JSON 知识库加载、缓存、关键词检索。
   - `retriever.py`: jieba 分词 + 关键词匹配检索器，返回 prompt 可注入片段。
   - `data/cantonese.json`: 粤语词汇对照表（40+ 条目）。
@@ -101,6 +102,10 @@ ASR → analyze_expression → retrieve_dialect_knowledge → rewrite_to_dialect
 3. 按匹配数排序，返回 Top-5
 4. 格式化为 prompt snippet：`「年轻人」→ 后生仔（口语常用，含亲切感）`
 5. 注入到 `rewrite_to_dialect` 的 system prompt 中
+
+### 图谱扩展接口
+
+`app/rag/graph.py` 预留了 `DialectGraphProvider` 协议和 `GraphDialectFact` 数据结构。默认不注册 provider，因此现有 JSON 词库检索行为不变；后续接入 Neo4j、NetworkX、RDF 或远端图谱服务时，只需实现 `query(source_text, dialect, top_k)` 并调用 `set_dialect_graph_provider(provider)`，`retriever.py` 会把图谱语义关系追加到同一个 RAG prompt 片段。
 
 ### 知识库文件
 

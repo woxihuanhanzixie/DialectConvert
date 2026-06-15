@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 
+from .graph import query_graph_facts
 from . import knowledge_base
 
 try:
@@ -22,7 +23,7 @@ except ImportError:
 
 def _tokenize(text: str) -> list[str]:
     """Tokenize Mandarin text into meaningful units."""
-    text = re.sub(r"[，。！？、；：""''（）\s]+", " ", text).strip()
+    text = re.sub(r"""[，。！？、；："'（）\s]+""", " ", text).strip()
     if not text:
         return []
 
@@ -61,19 +62,31 @@ def retrieve_dialect_knowledge(
 
     tokens = _tokenize(source_text)
     entries = knowledge_base.query(dialect, tokens, top_k=top_k)
+    graph_facts = query_graph_facts(source_text, dialect, top_k=top_k)
 
-    if not entries:
+    if not entries and not graph_facts:
         return ""
 
     lines: list[str] = []
-    lines.append("以下是该方言的正确表达参考（请优先使用）：")
-    for e in entries:
-        kw = e.get("keyword", "")
-        dex = e.get("dialect_expression", "")
-        note = e.get("usage_note", "")
-        line = f"- 「{kw}」→ {dex}"
-        if note:
-            line += f"（{note}）"
-        lines.append(line)
+    if entries:
+        lines.append("以下是该方言的正确表达参考（请优先使用）：")
+        for e in entries:
+            kw = e.get("keyword", "")
+            dex = e.get("dialect_expression", "")
+            note = e.get("usage_note", "")
+            line = f"- 「{kw}」→ {dex}"
+            if note:
+                line += f"（{note}）"
+            lines.append(line)
+
+    if graph_facts:
+        if lines:
+            lines.append("")
+        lines.append("以下是该方言知识图谱的语义关系参考：")
+        for fact in graph_facts:
+            line = f"- 「{fact.source}」--{fact.relation}-->「{fact.target}」"
+            if fact.note:
+                line += f"（{fact.note}）"
+            lines.append(line)
 
     return "\n".join(lines)
