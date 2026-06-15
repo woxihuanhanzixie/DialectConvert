@@ -1034,8 +1034,9 @@ a:focus-visible {
   object-fit: contain;
   display: block;
   pointer-events: none;
-  /* smooth, soft rounded artwork — keep anti-aliased edges */
-  image-rendering: auto;
+  /* crisp pixel-art sprite — no blurry interpolation */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 @keyframes mascotBounce {
