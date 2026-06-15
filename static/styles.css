@@ -1029,6 +1029,8 @@ a:focus-visible {
 }
 
 .mascot-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -1037,6 +1039,18 @@ a:focus-visible {
   /* crisp pixel-art sprite — no blurry interpolation */
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+/* closed-eye frame flashes briefly on top of the open frame = blink */
+.mascot-blink {
+  opacity: 0;
+  animation: mascotBlink 4.2s steps(1, end) infinite;
+}
+
+@keyframes mascotBlink {
+  0%, 90% { opacity: 0; }
+  91%, 95% { opacity: 1; }
+  96%, 100% { opacity: 0; }
 }
 
 @keyframes mascotBounce {
