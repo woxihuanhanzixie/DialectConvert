@@ -995,8 +995,17 @@ a:focus-visible {
   font-weight: 700;
   line-height: 1.35;
   box-shadow: inset 0 0 0 1px rgba(94, 234, 219, 0.06), 0 10px 24px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px) scale(0.96);
   transition: opacity 0.18s ease, transform 0.18s ease;
   animation: bubbleFloat 3s ease-in-out infinite;
+}
+
+.voice-mascot:hover .mascot-bubble,
+.voice-mascot:focus-visible .mascot-bubble {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .mascot-bubble::after {

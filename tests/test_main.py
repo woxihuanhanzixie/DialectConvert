@@ -34,9 +34,9 @@ def test_frontend_static_assets_are_served():
 
     assert index_response.status_code == 200
     assert 'id="convertForm"' in index_response.text
-    assert "/assets/20260615-frontend-v4/app.js" in index_response.text
-    assert "/assets/20260615-frontend-v4/styles.css" in index_response.text
-    assert "/v/20260615-frontend-v4" in index_response.text
+    assert "/assets/20260615-frontend-v5/app.js" in index_response.text
+    assert "/assets/20260615-frontend-v5/styles.css" in index_response.text
+    assert "/v/20260615-frontend-v5" in index_response.text
     assert "no-store" in index_response.headers["cache-control"]
     assert "no-cache" in index_response.headers["cache-control"]
 
@@ -56,9 +56,9 @@ def test_frontend_static_assets_are_served():
 def test_versioned_frontend_paths_bypass_stale_webview_cache():
     client = TestClient(app)
 
-    page = client.get("/v/20260615-frontend-v4")
-    app_js = client.get("/assets/20260615-frontend-v4/app.js")
-    styles = client.get("/assets/20260615-frontend-v4/styles.css")
+    page = client.get("/v/20260615-frontend-v5")
+    app_js = client.get("/assets/20260615-frontend-v5/app.js")
+    styles = client.get("/assets/20260615-frontend-v5/styles.css")
 
     assert page.status_code == 200
     assert app_js.status_code == 200
