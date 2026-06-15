@@ -951,7 +951,7 @@ a:focus-visible {
   bottom: max(18px, env(safe-area-inset-bottom));
   z-index: 18;
   width: 116px;
-  height: 112px;
+  height: 150px;
   border: 0;
   background: transparent;
   padding: 0;
@@ -1023,7 +1023,7 @@ a:focus-visible {
   right: 4px;
   bottom: 0;
   width: 88px;
-  height: 92px;
+  height: 130px;
   transform-origin: center bottom;
   animation: mascotBounce 2.4s ease-in-out infinite;
 }
@@ -1190,14 +1190,14 @@ a:focus-visible {
 
   .voice-mascot {
     width: 98px;
-    height: 98px;
+    height: 132px;
     right: 8px;
     bottom: max(10px, env(safe-area-inset-bottom));
   }
 
   .mascot-pet {
     width: 76px;
-    height: 80px;
+    height: 112px;
   }
 
   .mascot-bubble {
