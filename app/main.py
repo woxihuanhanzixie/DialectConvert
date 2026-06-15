@@ -16,7 +16,7 @@ from .pipeline import convert_audio, speak_with_registered_voice
 from .storage import ALLOWED_AUDIO_EXTS, ensure_dirs, new_job_id, public_url_for, save_upload, update_job_metadata
 
 
-FRONTEND_VERSION = "20260615-frontend-v3"
+FRONTEND_VERSION = "20260615-frontend-v4"
 
 ensure_dirs()
 

@@ -947,18 +947,18 @@ a:focus-visible {
 
 .voice-mascot {
   position: fixed;
-  right: 18px;
-  bottom: max(18px, env(safe-area-inset-bottom));
+  right: 20px;
+  bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 18;
-  width: 116px;
-  height: 150px;
+  width: 104px;
+  height: 118px;
   border: 0;
   background: transparent;
   padding: 0;
   cursor: grab;
   touch-action: none;
   user-select: none;
-  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.4));
+  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.38));
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -983,18 +983,18 @@ a:focus-visible {
 /* ---- Bubble ---- */
 .mascot-bubble {
   position: absolute;
-  right: 74px;
-  bottom: 36px;
-  width: 160px;
-  padding: 9px 12px;
-  border: 1px solid rgba(94, 234, 219, 0.35);
-  border-radius: 10px;
+  right: 76px;
+  bottom: 54px;
+  width: 136px;
+  padding: 8px 10px;
+  border: 1px solid rgba(194, 218, 200, 0.22);
+  border-radius: 8px;
   color: var(--ink);
-  background: rgba(14, 30, 22, 0.96);
-  font-size: 12px;
+  background: rgba(9, 19, 13, 0.94);
+  font-size: 11px;
   font-weight: 700;
-  line-height: 1.4;
-  box-shadow: inset 0 0 0 1px rgba(107, 217, 138, 0.08), 0 10px 24px rgba(0, 0, 0, 0.32);
+  line-height: 1.35;
+  box-shadow: inset 0 0 0 1px rgba(94, 234, 219, 0.06), 0 10px 24px rgba(0, 0, 0, 0.28);
   transition: opacity 0.18s ease, transform 0.18s ease;
   animation: bubbleFloat 3s ease-in-out infinite;
 }
@@ -1002,13 +1002,13 @@ a:focus-visible {
 .mascot-bubble::after {
   content: "";
   position: absolute;
-  right: -7px;
-  bottom: 16px;
+  right: -6px;
+  bottom: 14px;
   width: 10px;
   height: 10px;
-  border-top: 1px solid rgba(94, 234, 219, 0.35);
-  border-right: 1px solid rgba(94, 234, 219, 0.35);
-  background: rgba(14, 30, 22, 0.96);
+  border-top: 1px solid rgba(194, 218, 200, 0.22);
+  border-right: 1px solid rgba(194, 218, 200, 0.22);
+  background: rgba(9, 19, 13, 0.94);
   transform: rotate(45deg);
 }
 
@@ -1020,10 +1020,10 @@ a:focus-visible {
 /* ---- Pixel-art sprite ---- */
 .mascot-pet {
   position: absolute;
-  right: 4px;
+  right: 0;
   bottom: 0;
-  width: 88px;
-  height: 130px;
+  width: 94px;
+  height: 104px;
   transform-origin: center bottom;
   animation: mascotBounce 2.4s ease-in-out infinite;
 }
@@ -1189,22 +1189,22 @@ a:focus-visible {
   }
 
   .voice-mascot {
-    width: 98px;
-    height: 132px;
+    width: 88px;
+    height: 102px;
     right: 8px;
     bottom: max(10px, env(safe-area-inset-bottom));
   }
 
   .mascot-pet {
-    width: 76px;
-    height: 112px;
+    width: 80px;
+    height: 90px;
   }
 
   .mascot-bubble {
     right: 0;
-    bottom: 80px;
-    width: 130px;
-    font-size: 11px;
+    bottom: 76px;
+    width: 118px;
+    font-size: 10px;
   }
 
   .mascot-bubble::after {
