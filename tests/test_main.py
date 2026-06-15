@@ -34,14 +34,17 @@ def test_frontend_static_assets_are_served():
 
     assert index_response.status_code == 200
     assert 'id="convertForm"' in index_response.text
-    assert "/static/app.js" in index_response.text
-    assert "/static/styles.css" in index_response.text
+    assert "/static/app.js?v=" in index_response.text
+    assert "/static/styles.css?v=" in index_response.text
+    assert "no-cache" in index_response.headers["cache-control"]
 
     assert app_js_response.status_code == 200
+    assert "no-cache" in app_js_response.headers["cache-control"]
     assert 'document.querySelector("#convertForm")' in app_js_response.text
     assert "form.addEventListener" in app_js_response.text
 
     assert styles_response.status_code == 200
+    assert "no-cache" in styles_response.headers["cache-control"]
     assert ".app-shell" in styles_response.text
     assert ".primary" in styles_response.text
 

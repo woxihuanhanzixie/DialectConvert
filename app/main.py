@@ -6,6 +6,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 from starlette.concurrency import run_in_threadpool
 
 from .audio_utils import ensure_reference_audio_duration, make_browser_preview_audio
@@ -19,6 +20,17 @@ ensure_dirs()
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
 
+
+class NoCacheStaticFiles(StaticFiles):
+    """Serve frontend assets with revalidation to avoid stale mobile WebViews."""
+
+    async def get_response(self, path: str, scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
 origins = ["*"] if settings.cors_origins == "*" else [x.strip() for x in settings.cors_origins.split(",") if x.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -28,13 +40,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory=ROOT_DIR / "static"), name="static")
+app.mount("/static", NoCacheStaticFiles(directory=ROOT_DIR / "static"), name="static")
 app.mount("/media", StaticFiles(directory=settings.data_dir), name="media")
 
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(ROOT_DIR / "static" / "index.html")
+    response = FileResponse(ROOT_DIR / "static" / "index.html")
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.get("/health", response_model=HealthResult)
