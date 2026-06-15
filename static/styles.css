@@ -1017,224 +1017,32 @@ a:focus-visible {
   50% { transform: translateY(-4px); }
 }
 
-/* ---- Softer, cuter mascot body ---- */
+/* ---- Pixel-art sprite ---- */
 .mascot-pet {
   position: absolute;
-  right: 6px;
+  right: 4px;
   bottom: 0;
-  width: 84px;
-  height: 90px;
+  width: 88px;
+  height: 92px;
   transform-origin: center bottom;
   animation: mascotBounce 2.4s ease-in-out infinite;
 }
 
+.mascot-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  /* keep the pixels crisp — no blurry upscaling */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
 @keyframes mascotBounce {
   0%, 100% { transform: translateY(0) rotate(0deg); }
-  30% { transform: translateY(-6px) rotate(-1deg); }
+  30% { transform: translateY(-5px) rotate(-1deg); }
   60% { transform: translateY(-2px) rotate(1deg); }
-}
-
-/* ---- Head — rounder, friendlier ---- */
-.mascot-head {
-  position: absolute;
-  left: 6px;
-  top: 30px;
-  width: 72px;
-  height: 62px;
-  border: 5px solid #5a8140;
-  border-radius: 20px 20px 16px 16px;
-  background: linear-gradient(180deg, #e9f7c2 0%, #c9e68c 60%, #b5d97a 100%);
-  box-shadow:
-    inset 0 4px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -8px 0 rgba(90, 120, 50, 0.18);
-}
-
-/* ---- Ears — cat-like triangles ---- */
-.mascot-ear {
-  position: absolute;
-  top: 50px;
-  width: 20px;
-  height: 20px;
-  background: linear-gradient(180deg, #d4ea9f, #a8d06a);
-  border: 4px solid #5a8140;
-  border-radius: 10px 4px 10px 4px;
-}
-
-.mascot-ear.left {
-  left: 0;
-  border-radius: 10px 4px 10px 4px;
-  transform: rotate(-12deg);
-}
-
-.mascot-ear.right {
-  right: 0;
-  border-radius: 4px 10px 4px 10px;
-  transform: rotate(12deg);
-}
-
-/* ---- Screen / face area ---- */
-.mascot-screen {
-  position: absolute;
-  left: 8px;
-  top: 16px;
-  width: 46px;
-  height: 32px;
-  border: 3px solid #9fb870;
-  border-radius: 10px;
-  background: #faf7e0;
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.55);
-}
-
-/* ---- Eyes — big and cute ---- */
-.mascot-eye {
-  position: absolute;
-  top: 10px;
-  width: 7px;
-  height: 9px;
-  background: #142218;
-  border-radius: 50%;
-  animation: mascotBlink 4s ease-in-out infinite;
-}
-
-.mascot-eye.left { left: 9px; }
-.mascot-eye.right { right: 9px; }
-
-@keyframes mascotBlink {
-  0%, 45%, 55%, 100% { transform: scaleY(1); }
-  48%, 52% { transform: scaleY(0.15); }
-}
-
-/* ---- Rosy cheeks ---- */
-.mascot-blush {
-  position: absolute;
-  top: 19px;
-  width: 11px;
-  height: 6px;
-  background: #ffb8b0;
-  border-radius: 50%;
-  opacity: 0.8;
-}
-
-.mascot-blush.left { left: 3px; }
-.mascot-blush.right { right: 3px; }
-
-/* ---- Sprout on head ---- */
-.mascot-sprout {
-  position: absolute;
-  left: 38px;
-  top: -2px;
-  width: 6px;
-  height: 36px;
-  background: #6d8a40;
-  border-radius: 3px;
-  transform: rotate(-3deg);
-  transform-origin: bottom center;
-  animation: sproutSway 3s ease-in-out infinite;
-}
-
-@keyframes sproutSway {
-  0%, 100% { transform: rotate(-3deg); }
-  50% { transform: rotate(3deg); }
-}
-
-.mascot-leaf {
-  position: absolute;
-  top: 0;
-  width: 28px;
-  height: 18px;
-  border: 3px solid #5a9040;
-  background: linear-gradient(180deg, #a0e85a 0%, #7ac838 100%);
-  border-radius: 12px 3px 10px 2px;
-  box-shadow: inset 0 -3px 0 rgba(70, 110, 30, 0.18);
-}
-
-.mascot-leaf.left {
-  right: 2px;
-  transform: rotate(18deg);
-}
-
-.mascot-leaf.right {
-  left: 2px;
-  border-radius: 3px 12px 2px 10px;
-  transform: rotate(-12deg);
-}
-
-/* ---- Body — visible now with a tiny badge ---- */
-.mascot-torso {
-  position: absolute;
-  left: 22px;
-  top: 88px;
-  width: 42px;
-  height: 34px;
-  border: 4px solid #5a8140;
-  border-radius: 8px 8px 12px 12px;
-  background: linear-gradient(180deg, #e9f7c2, #c9e68c);
-  box-shadow: inset 0 -5px 0 rgba(90, 120, 50, 0.14);
-}
-
-.mascot-badge {
-  position: absolute;
-  left: 13px;
-  top: 8px;
-  width: 16px;
-  height: 16px;
-  background:
-    linear-gradient(#7ac838, #7ac838) 6px 0 / 4px 16px no-repeat,
-    linear-gradient(#7ac838, #7ac838) 0 6px / 16px 4px no-repeat;
-  border-radius: 2px;
-}
-
-/* ---- Arms — small nubs ---- */
-.mascot-arm {
-  position: absolute;
-  top: 96px;
-  width: 10px;
-  height: 22px;
-  border: 3px solid #5a8140;
-  background: #d4ea9f;
-  border-radius: 6px;
-}
-
-.mascot-arm.left {
-  left: 14px;
-  transform: rotate(8deg);
-  animation: armWaveLeft 2.8s ease-in-out infinite;
-}
-
-.mascot-arm.right {
-  right: 14px;
-  transform: rotate(-8deg);
-  animation: armWaveRight 2.8s ease-in-out infinite;
-}
-
-@keyframes armWaveLeft {
-  0%, 100% { transform: rotate(8deg); }
-  50% { transform: rotate(2deg) translateY(-2px); }
-}
-
-@keyframes armWaveRight {
-  0%, 100% { transform: rotate(-8deg); }
-  50% { transform: rotate(-2deg) translateY(-2px); }
-}
-
-/* ---- Feet — cute little paws ---- */
-.mascot-foot {
-  position: absolute;
-  bottom: 0;
-  width: 16px;
-  height: 9px;
-  border: 3px solid #5a8140;
-  border-radius: 0 0 6px 6px;
-  background: #b5d97a;
-}
-
-.mascot-foot.left { left: 28px; }
-.mascot-foot.right { right: 28px; }
-
-/* ---- Idle jitter ---- */
-@keyframes mascotIdle {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
 }
 
 @media (max-width: 940px) {
@@ -1374,41 +1182,9 @@ a:focus-visible {
   }
 
   .mascot-pet {
-    width: 72px;
-    height: 78px;
+    width: 76px;
+    height: 80px;
   }
-
-  .mascot-head {
-    width: 60px;
-    height: 52px;
-    left: 6px;
-    top: 26px;
-  }
-
-  .mascot-screen {
-    width: 38px;
-    height: 26px;
-    left: 7px;
-    top: 13px;
-  }
-
-  .mascot-eye { width: 6px; height: 8px; top: 8px; }
-  .mascot-eye.left { left: 7px; }
-  .mascot-eye.right { right: 7px; }
-  .mascot-blush { top: 16px; width: 9px; height: 5px; }
-  .mascot-blush.left { left: 2px; }
-  .mascot-blush.right { right: 2px; }
-  .mascot-ear { top: 42px; width: 16px; height: 16px; }
-  .mascot-sprout { left: 32px; top: -2px; height: 28px; width: 5px; }
-  .mascot-leaf { width: 22px; height: 14px; }
-  .mascot-torso { left: 18px; top: 74px; width: 34px; height: 28px; }
-  .mascot-badge { left: 9px; top: 6px; width: 14px; height: 14px; }
-  .mascot-arm { top: 80px; width: 8px; height: 18px; }
-  .mascot-arm.left { left: 12px; }
-  .mascot-arm.right { right: 12px; }
-  .mascot-foot { width: 14px; height: 8px; }
-  .mascot-foot.left { left: 24px; }
-  .mascot-foot.right { right: 24px; }
 
   .mascot-bubble {
     right: 0;

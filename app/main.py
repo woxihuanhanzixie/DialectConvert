@@ -16,6 +16,8 @@ from .pipeline import convert_audio, speak_with_registered_voice
 from .storage import ALLOWED_AUDIO_EXTS, ensure_dirs, new_job_id, public_url_for, save_upload, update_job_metadata
 
 
+FRONTEND_VERSION = "20260615-frontend-v3"
+
 ensure_dirs()
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
@@ -26,7 +28,7 @@ class NoCacheStaticFiles(StaticFiles):
 
     async def get_response(self, path: str, scope) -> Response:
         response = await super().get_response(path, scope)
-        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response
@@ -41,16 +43,26 @@ app.add_middleware(
 )
 
 app.mount("/static", NoCacheStaticFiles(directory=ROOT_DIR / "static"), name="static")
+app.mount(f"/assets/{FRONTEND_VERSION}", NoCacheStaticFiles(directory=ROOT_DIR / "static"), name="versioned-static")
 app.mount("/media", StaticFiles(directory=settings.data_dir), name="media")
+
+
+def _frontend_response() -> FileResponse:
+    response = FileResponse(ROOT_DIR / "static" / "index.html")
+    response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.get("/")
 def index() -> FileResponse:
-    response = FileResponse(ROOT_DIR / "static" / "index.html")
-    response.headers["Cache-Control"] = "no-cache, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
+    return _frontend_response()
+
+
+@app.get(f"/v/{FRONTEND_VERSION}")
+def versioned_index() -> FileResponse:
+    return _frontend_response()
 
 
 @app.get("/health", response_model=HealthResult)

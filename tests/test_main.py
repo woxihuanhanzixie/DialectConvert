@@ -34,19 +34,39 @@ def test_frontend_static_assets_are_served():
 
     assert index_response.status_code == 200
     assert 'id="convertForm"' in index_response.text
-    assert "/static/app.js?v=" in index_response.text
-    assert "/static/styles.css?v=" in index_response.text
+    assert "/assets/20260615-frontend-v3/app.js" in index_response.text
+    assert "/assets/20260615-frontend-v3/styles.css" in index_response.text
+    assert "/v/20260615-frontend-v3" in index_response.text
+    assert "no-store" in index_response.headers["cache-control"]
     assert "no-cache" in index_response.headers["cache-control"]
 
     assert app_js_response.status_code == 200
+    assert "no-store" in app_js_response.headers["cache-control"]
     assert "no-cache" in app_js_response.headers["cache-control"]
     assert 'document.querySelector("#convertForm")' in app_js_response.text
     assert "form.addEventListener" in app_js_response.text
 
     assert styles_response.status_code == 200
+    assert "no-store" in styles_response.headers["cache-control"]
     assert "no-cache" in styles_response.headers["cache-control"]
     assert ".app-shell" in styles_response.text
     assert ".primary" in styles_response.text
+
+
+def test_versioned_frontend_paths_bypass_stale_webview_cache():
+    client = TestClient(app)
+
+    page = client.get("/v/20260615-frontend-v3")
+    app_js = client.get("/assets/20260615-frontend-v3/app.js")
+    styles = client.get("/assets/20260615-frontend-v3/styles.css")
+
+    assert page.status_code == 200
+    assert app_js.status_code == 200
+    assert styles.status_code == 200
+    assert "no-store" in page.headers["cache-control"]
+    assert 'id="convertForm"' in page.text
+    assert 'document.querySelector("#convertForm")' in app_js.text
+    assert ".app-shell" in styles.text
 
 
 def test_mobile_capture_content_types_are_supported():
