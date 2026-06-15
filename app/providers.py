@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -16,6 +17,43 @@ from .storage import atomic_write_bytes, media_url_to_public, public_url_for
 
 class ProviderError(RuntimeError):
     pass
+
+
+def _parse_llm_json(content: str) -> dict[str, Any]:
+    """Parse LLM JSON even when the model wraps it in Markdown fences."""
+
+    raw = (content or "").strip()
+    if not raw:
+        raise json.JSONDecodeError("empty JSON content", raw, 0)
+
+    candidates = [raw]
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        candidates.insert(0, fenced.group(1).strip())
+
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start >= 0 and end > start:
+        candidates.append(raw[start : end + 1].strip())
+
+    last_error: json.JSONDecodeError | None = None
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+        raise json.JSONDecodeError("JSON root is not an object", candidate, 0)
+    raise last_error or json.JSONDecodeError("invalid JSON content", raw, 0)
+
+
+def _clean_llm_field(value: Any, max_chars: int = 500) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"\s*```$", "", text).strip()
+    return text[:max_chars] if len(text) > max_chars else text
 
 
 def _headers(api_key: str | None = None) -> dict[str, str]:
@@ -319,12 +357,12 @@ def analyze_expression(source_text: str) -> dict[str, str]:
     try:
         data = _request_json("POST", url, headers=_headers(settings.qwen_llm_api_key), payload=payload)
         content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-        parsed = json.loads(content)
+        parsed = _parse_llm_json(content)
     except (ProviderError, json.JSONDecodeError, KeyError, TypeError) as exc:
         fallback["prosody_instruction"] = f'{fallback["prosody_instruction"]}；情感分析回退'
         return fallback
 
-    display_text = str(parsed.get("display_text") or fallback["display_text"]).strip()
+    display_text = _clean_llm_field(parsed.get("display_text") or fallback["display_text"])
     emotion_label = _short_text(parsed.get("emotion_label"), fallback_label, 8)
     prosody_instruction = _short_text(
         parsed.get("prosody_instruction"),
@@ -407,8 +445,15 @@ def rewrite_to_dialect(
             f"\n原句情绪：{expression.get('emotion_label', '自然')}。"
             f"\n朗读语调：{expression.get('prosody_instruction', '自然口语，有轻微起伏')}。"
         )
-    # RAG knowledge injection: prepend dialect reference before the source text
-    rag_block = f"\n{rag_context}\n" if rag_context else ""
+    # RAG knowledge injection: keep references clearly separated from the text
+    # to rewrite so the model cannot mistake retrieved facts for user content.
+    rag_block = ""
+    if rag_context:
+        rag_block = f"""
+【方言参考资料：仅供选词和语气参考，不是用户正文；不匹配时忽略】
+{rag_context}
+【参考资料结束】
+""".rstrip()
     prompt = f"""
 你是中国方言口语化改写专家。把用户文本改写为自然、可朗读、适合 TTS 的{dialect_names[dialect]}。
 要求：
@@ -416,14 +461,16 @@ def rewrite_to_dialect(
 2. 输出必须像本地人自然讲话，不要只是普通话换几个词。
 3. 保留原句标点承载的停顿、惊讶、焦急、开心或低落等情绪。
 4. 避免生僻字堆砌，必要时使用常见汉字表达方言语气。
-5. 返回 JSON：{{"dialect_text": "...", "pronunciation_note": "简短说明"}}。
+5. `dialect_text` 只能是最终要朗读的方言文本，不能包含 JSON 字段名、Markdown、代码块、拼音注释或解释。
+6. 除方言必要用字外，优先使用简体中文书写；专名如“声临其境”保持原样。
+7. 返回严格 JSON 对象：{{"dialect_text": "...", "pronunciation_note": "简短说明"}}，不要输出 Markdown。
 {rag_block}
 用户文本：{source_text}{emotion_note}
 """.strip()
     payload = {
         "model": settings.qwen_llm_model,
         "messages": [
-            {"role": "system", "content": "你只输出合法 JSON，不输出 Markdown。"},
+            {"role": "system", "content": "你只输出合法 JSON 对象。禁止 Markdown、禁止代码块、禁止在 JSON 外输出任何字符。"},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.35,
@@ -431,12 +478,15 @@ def rewrite_to_dialect(
     data = _request_json("POST", url, headers=_headers(settings.qwen_llm_api_key), payload=payload)
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
     try:
-        parsed = json.loads(content)
+        parsed = _parse_llm_json(content)
     except json.JSONDecodeError:
-        parsed = {"dialect_text": content, "pronunciation_note": "模型未返回 JSON，已按纯文本处理。"}
+        parsed = {"dialect_text": source_text, "pronunciation_note": "模型未返回可解析 JSON，已保留原文避免污染音频。"}
+    dialect_text = _clean_llm_field(parsed.get("dialect_text") or source_text)
+    if any(marker in dialect_text for marker in ("```", "dialect_text", "pronunciation_note", "{", "}")):
+        dialect_text = source_text
     return {
-        "dialect_text": str(parsed.get("dialect_text") or source_text).strip(),
-        "pronunciation_note": str(parsed.get("pronunciation_note") or "").strip(),
+        "dialect_text": dialect_text,
+        "pronunciation_note": _clean_llm_field(parsed.get("pronunciation_note") or "", max_chars=160),
     }
 
 

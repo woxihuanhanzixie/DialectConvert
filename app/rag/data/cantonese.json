@@ -68,5 +68,12 @@
   {"keyword": "效果", "dialect_expression": "效果 / 出嚟个效果", "category": "评价", "usage_note": "评价生成结果时可说「出嚟个效果」", "context": "演示效果、合成效果", "source": "公开词典与人工整理，LLM辅助未审校"},
   {"keyword": "失败", "dialect_expression": "失败 / 唔成功", "category": "状态", "usage_note": "提示用户时「唔成功」更直白", "context": "任务失败、注册失败", "source": "公开词典与人工整理，LLM辅助未审校"},
   {"keyword": "成功", "dialect_expression": "成功 / 搞掂", "category": "状态", "usage_note": "「搞掂」=办妥，口语非常常见", "context": "任务成功、操作完成", "source": "公开词典与人工整理，LLM辅助未审校"},
-  {"keyword": "大家", "dialect_expression": "大家 / 大家一齐", "category": "人称", "usage_note": "号召语境常说「大家一齐」", "context": "面向群体", "source": "公开词典与人工整理，LLM辅助未审校"}
+  {"keyword": "大家", "dialect_expression": "大家 / 大家一齐", "category": "人称", "usage_note": "号召语境常说「大家一齐」", "context": "面向群体", "source": "公开词典与人工整理，LLM辅助未审校"},
+  {"keyword": "评委老师", "dialect_expression": "评委老师 / 评审老师", "category": "比赛", "usage_note": "比赛答辩场景保留「评委/评审」，避免误写成「评判」", "context": "答辩开场、比赛评审", "source": "比赛演示语境人工补充，LLM辅助未审校"},
+  {"keyword": "项目组", "dialect_expression": "项目组", "category": "比赛", "usage_note": "专有组织称谓建议保留，不强行方言化", "context": "项目介绍、团队介绍", "source": "比赛演示语境人工补充，LLM辅助未审校"},
+  {"keyword": "很荣幸", "dialect_expression": "好荣幸 / 好开心", "category": "礼貌", "usage_note": "答辩开场可用「好荣幸」保持正式礼貌", "context": "正式致辞、比赛开场", "source": "比赛演示语境人工补充，LLM辅助未审校"},
+  {"keyword": "参加", "dialect_expression": "参加 / 参与", "category": "比赛", "usage_note": "正式比赛场景保留「参加」更稳妥", "context": "参加比赛、参与活动", "source": "比赛演示语境人工补充，LLM辅助未审校"},
+  {"keyword": "这次", "dialect_expression": "今次 / 呢次", "category": "指示", "usage_note": "正式介绍多用「今次」，口语可用「呢次」", "context": "本次活动、本次比赛", "source": "比赛演示语境人工补充，LLM辅助未审校"},
+  {"keyword": "比赛", "dialect_expression": "比赛", "category": "比赛", "usage_note": "通用正式表达，粤语文本中可保留", "context": "竞赛、答辩", "source": "比赛演示语境人工补充，LLM辅助未审校"},
+  {"keyword": "决赛", "dialect_expression": "决赛", "category": "比赛", "usage_note": "通用正式表达，粤语文本中可保留", "context": "比赛阶段", "source": "比赛演示语境人工补充，LLM辅助未审校"}
 ]

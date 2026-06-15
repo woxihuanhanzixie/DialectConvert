@@ -16,9 +16,9 @@
   - `graph.py`: 方言知识图谱扩展接口，默认无 provider；后续 Neo4j/NetworkX/RDF 可通过 `set_dialect_graph_provider()` 注入。
   - `knowledge_base.py`: JSON 知识库加载、缓存、关键词检索。
   - `retriever.py`: jieba 分词 + 关键词匹配检索器，返回 prompt 可注入片段。
-  - `data/cantonese.json`: 粤语词汇对照表（40+ 条目）。
-  - `data/sichuanese.json`: 四川话词汇对照表（40+ 条目）。
-  - `data/hokkien.json`: 闽南话词汇对照表（40+ 条目）。
+  - `data/cantonese.json`: 粤语词汇对照表（77 条目）。
+  - `data/sichuanese.json`: 四川话词汇对照表（70 条目）。
+  - `data/hokkien.json`: 闽南话词汇对照表（73 条目）。
 - `app/storage.py`: 上传文件、输出文件、元数据、音色缓存和运行时清理。
 - `app/audio_utils.py`: 音频预览、时长检测、移动端格式兼容和错误识别。
 - `static/`: 单页前端。
@@ -115,7 +115,7 @@ ASR → analyze_expression → retrieve_dialect_knowledge → rewrite_to_dialect
  "usage_note": "口语常用，含亲切感", "context": "泛指年轻一代"}
 ```
 
-当前每种方言 ~40 条种子数据，持续扩充中。详细方案见 `docs/RAG方言语义增强实现方案.md`。
+当前粤语 77 条、四川话 70 条、闽南话 73 条种子数据，持续扩充中。详细方案见 `docs/RAG方言语义增强实现方案.md`。
 
 ## 方言知识图谱（后续计划）
 

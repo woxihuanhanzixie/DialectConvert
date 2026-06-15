@@ -30,6 +30,14 @@ def test_ai_unclear_demo_sentence_retrieves_dialect_context():
         assert "不清楚" in context or "有点" in context
 
 
+def test_cantonese_competition_context_retrieves_formal_terms():
+    context = retrieve_dialect_knowledge("各位评委老师，我们很荣幸参加这次比赛决赛", "cantonese", top_k=8)
+
+    assert "评委老师" in context
+    assert "好荣幸" in context
+    assert "今次" in context or "呢次" in context
+
+
 def test_optional_graph_provider_can_extend_rag_context():
     class FakeGraphProvider:
         def query(self, source_text, dialect, top_k=5):
