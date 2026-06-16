@@ -39,7 +39,7 @@
 7. `build_tts_instruction` 合并官方方言指令、参考音频时长和短情绪语调。
 8. `synthesize`（Gold Teacher）使用 `cosyvoice-v3-plus` + 系统音色 `longanyang` 生成系统音色方言音频。
 9. `enroll_voice` 使用参考音频调用 CosyVoice voice-enrollment 注册音色；仅当音频 SHA256、字节数、参考时长和 target_model 均匹配时复用缓存。
-10. `synthesize`（Voice Matched）使用注册的 `voice_id` + `cosyvoice-v3.5-plus` 生成用户音色方言音频；若输出时长明显慢于参考音频，使用更快语速 instruction 自动重试一次。
+10. `synthesize`（Voice Matched）使用注册的 `voice_id` + `cosyvoice-v3.5-plus` 生成用户音色方言音频；若输出时长明显慢于参考音频，使用更快语速 instruction 自动重试一次，仍过慢则用 `ffmpeg atempo` 校准最终 MP3 时长。
 11. `recommended_audio_url` 优先使用 Voice Matched；失败回退 Gold Teacher。
 12. 前端展示结果；Voice Matched 成功后可复用 `voice_id` 继续合成。
 

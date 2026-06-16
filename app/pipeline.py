@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .audio_utils import audio_duration_seconds, is_audio_too_short_error
+from .audio_utils import audio_duration_seconds, is_audio_too_short_error, speed_audio_to_duration
 from .config import settings
 from .models import ConversionResult, RegisteredVoiceSpeakResult
 from .providers import (
@@ -166,6 +166,8 @@ def convert_audio(
                 instruction=retry_instruction,
                 language_hint=tts_control["language_hint"],
             )
+            if _is_too_slow_for_reference(voice_output_path.with_suffix(".mp3"), reference_duration_s):
+                speed_audio_to_duration(voice_output_path.with_suffix(".mp3"), reference_duration_s)
     except ProviderError as exc:
         if is_audio_too_short_error(exc):
             warnings.append("Voice Matched 克隆音色失败：服务器繁忙，请稍后再试")

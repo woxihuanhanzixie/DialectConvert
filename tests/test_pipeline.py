@@ -91,7 +91,8 @@ def test_convert_audio_retries_voice_matched_when_too_slow(monkeypatch, tmp_path
     audio = tmp_path / "ref.wav"
     audio.write_bytes(b"fake-audio")
     synth_calls = []
-    measured_durations = iter([10.9, 8.7])
+    measured_durations = iter([10.9, 10.6])
+    speed_calls = []
 
     monkeypatch.setattr(pipeline, "cleanup_runtime", lambda: 0)
     monkeypatch.setattr(pipeline, "transcribe_audio", lambda path: "\u5404\u4f4d\u8bc4\u59d4\u8001\u5e08\u4f60\u4eec\u597d")
@@ -132,6 +133,11 @@ def test_convert_audio_retries_voice_matched_when_too_slow(monkeypatch, tmp_path
         "audio_duration_seconds",
         lambda path: next(measured_durations) if "voice_matched" in path.name else None,
     )
+    monkeypatch.setattr(
+        pipeline,
+        "speed_audio_to_duration",
+        lambda path, duration_s: speed_calls.append((path.name, duration_s)) or 8.7,
+    )
 
     def fake_synth(text, output_path, *, voice, model=None, instruction=None, language_hint="zh"):
         synth_calls.append({"voice": voice, "instruction": instruction})
@@ -146,6 +152,7 @@ def test_convert_audio_retries_voice_matched_when_too_slow(monkeypatch, tmp_path
     assert len(voice_calls) == 2
     assert "\u7ea68.6\u79d2\u8bfb\u5b8c" in voice_calls[0]["instruction"]
     assert "\u8bed\u901f\u52a0\u5feb" in voice_calls[1]["instruction"]
+    assert speed_calls == [("job_voice_matched.mp3", 8.576)]
     assert result.voice_matched_audio_url == "/media/job_voice_matched.mp3-3.mp3"
 
 

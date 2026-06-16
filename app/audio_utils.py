@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import wave
@@ -55,6 +56,54 @@ def make_browser_preview_audio(source_path: Path, target_path: Path) -> tuple[Pa
     if proc.returncode != 0 or not target_path.exists() or target_path.stat().st_size == 0:
         return source_path, duration
     return target_path, duration or audio_duration_seconds(target_path)
+
+
+def speed_audio_to_duration(path: Path, target_duration_s: float, *, tolerance_ratio: float = 0.15) -> float | None:
+    """Speed up an audio file in-place when it is clearly slower than the target."""
+    current_duration = audio_duration_seconds(path)
+    if current_duration is None or target_duration_s <= 0:
+        return current_duration
+    if current_duration <= max(target_duration_s * (1 + tolerance_ratio), target_duration_s + 0.75):
+        return current_duration
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return current_duration
+    factor = current_duration / target_duration_s
+    if factor <= 1:
+        return current_duration
+    filters = _atempo_filters(factor)
+    tmp_path = path.with_name(f"{path.stem}.speedtmp{path.suffix}")
+    command = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(path),
+        "-filter:a",
+        filters,
+        "-vn",
+        str(tmp_path),
+    ]
+    try:
+        proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return current_duration
+    if proc.returncode != 0 or not tmp_path.exists() or tmp_path.stat().st_size == 0:
+        tmp_path.unlink(missing_ok=True)
+        return current_duration
+    os.replace(tmp_path, path)
+    return audio_duration_seconds(path) or current_duration
+
+
+def _atempo_filters(factor: float) -> str:
+    factors: list[float] = []
+    while factor > 2.0:
+        factors.append(2.0)
+        factor /= 2.0
+    while factor < 0.5:
+        factors.append(0.5)
+        factor /= 0.5
+    factors.append(factor)
+    return ",".join(f"atempo={item:.6f}" for item in factors)
 
 
 def is_audio_too_short_error(error: object) -> bool:

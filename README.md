@@ -72,7 +72,7 @@ flowchart TD
 6. 调用 `rewrite_to_dialect` 生成目标方言口语文本。
 7. 调用 `build_tts_instruction` 合并方言指令、参考录音时长和情绪语调，例如“请用广东话表达，贴近参考录音语速，约 8.6 秒读完，语气自然。”。
 8. 先生成 Gold Teacher，再注册或复用与本次音频 SHA256、字节数、时长和 target model 匹配的用户音色缓存。
-9. 使用同一段方言文本和短指令合成 Voice Matched；若输出明显慢于参考录音，会自动用更快语速指令重试一次。
+9. 使用同一段方言文本和短指令合成 Voice Matched；若输出明显慢于参考录音，会自动用更快语速指令重试一次，仍过慢则用 `ffmpeg atempo` 对最终 MP3 做轻量时长校准。
 10. 前端优先推荐 Voice Matched；失败时保留 Gold Teacher 并展示警告。
 
 ## 旧本地链路与失败经验
