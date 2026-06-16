@@ -36,10 +36,10 @@
 4. `analyze_expression` 用 Qwen LLM 恢复标点，生成 `emotion_label` 与 `prosody_instruction`。
 5. **`retrieve_dialect_knowledge` 用 jieba 分词检索方言知识库，生成 RAG 上下文片段。**
 6. **`rewrite_to_dialect` 接收 RAG 上下文，在 prompt 中注入方言词汇参考后生成自然方言文本。**
-7. `build_tts_instruction` 合并官方方言指令和短情绪语调。
+7. `build_tts_instruction` 合并官方方言指令、参考音频时长和短情绪语调。
 8. `synthesize`（Gold Teacher）使用 `cosyvoice-v3-plus` + 系统音色 `longanyang` 生成系统音色方言音频。
-9. `enroll_voice` 使用参考音频调用 CosyVoice voice-enrollment 注册音色；相同参考音频 + 相同 target_model 命中缓存则复用。
-10. `synthesize`（Voice Matched）使用注册的 `voice_id` + `cosyvoice-v3.5-plus` 生成用户音色方言音频。
+9. `enroll_voice` 使用参考音频调用 CosyVoice voice-enrollment 注册音色；仅当音频 SHA256、字节数、参考时长和 target_model 均匹配时复用缓存。
+10. `synthesize`（Voice Matched）使用注册的 `voice_id` + `cosyvoice-v3.5-plus` 生成用户音色方言音频；若输出时长明显慢于参考音频，使用更快语速 instruction 自动重试一次。
 11. `recommended_audio_url` 优先使用 Voice Matched；失败回退 Gold Teacher。
 12. 前端展示结果；Voice Matched 成功后可复用 `voice_id` 继续合成。
 
@@ -133,6 +133,7 @@ ASR → analyze_expression → retrieve_dialect_knowledge → rewrite_to_dialect
 - 真实转换必须配置 `DASHSCOPE_API_KEY` 和公网可回拉的 `PUBLIC_BASE_URL`。
 - `runtime_data/uploads` / `outputs` / `jobs` / `voice_cache`。
 - `cleanup_runtime`、`CLEANUP_AFTER_HOURS`、`VOICE_CACHE_TTL_HOURS` 控制磁盘增长。
+- 音色缓存 schema v2 绑定 `audio_sha256`、`audio_bytes`、`audio_duration_s` 和 `target_model`；旧 schema 或元数据不匹配不会复用。
 - `ENABLE_MOCK_WHEN_NO_KEY=1` 只用于无密钥本地演示或测试。
 
 ## 部署约定
@@ -158,7 +159,7 @@ ssh -i ~/.ssh/dialectconvert_key.pem root@43.139.53.84 "systemctl is-active dial
 - 不提交 `.env`、私钥、API key、上传音频、输出音频和运行缓存。
 - 不在日志、文档或提交信息中暴露密钥内容。
 - `voice_id` 是可复用音色标识，不应作为公开示例写入仓库。
-- CosyVoice `instruction` 保持短句（≤95 字符），避免超长指令影响方言输出或触发接口限制。
+- CosyVoice `instruction` 保持短句（按中文加权≤95 字符），避免超长指令影响方言输出或触发接口限制。
 
 ## 文档维护
 

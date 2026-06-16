@@ -116,7 +116,7 @@ async def convert(
     try:
         audio_path = await save_upload(audio, job_id)
         duration_s = await run_in_threadpool(ensure_reference_audio_duration, audio_path)
-        result = await run_in_threadpool(convert_audio, job_id, audio_path, dialect)
+        result = await run_in_threadpool(convert_audio, job_id, audio_path, dialect, duration_s)
         update_job_metadata(
             job_id,
             {

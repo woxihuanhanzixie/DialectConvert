@@ -126,7 +126,19 @@ def voice_cache_key(audio_path: Path, target_model: str) -> str:
     return hashlib.sha256(f"{sha256_file(audio_path)}:{target_model}".encode("utf-8")).hexdigest()
 
 
-def read_voice_cache(cache_key: str) -> dict | None:
+def voice_cache_metadata(audio_path: Path, target_model: str, duration_s: float | None = None) -> dict:
+    metadata = {
+        "cache_schema": 2,
+        "audio_sha256": sha256_file(audio_path),
+        "audio_bytes": audio_path.stat().st_size,
+        "target_model": target_model,
+    }
+    if duration_s is not None:
+        metadata["audio_duration_s"] = round(float(duration_s), 3)
+    return metadata
+
+
+def read_voice_cache(cache_key: str, expected: dict | None = None) -> dict | None:
     path = settings.cache_dir / f"{cache_key}.json"
     if not path.exists():
         return None
@@ -134,9 +146,28 @@ def read_voice_cache(cache_key: str) -> dict | None:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
-    if data.get("status") == "ok" and data.get("voice_id"):
-        return data
-    return None
+    if data.get("status") != "ok" or not data.get("voice_id"):
+        return None
+    if expected and not _voice_cache_matches(data, expected):
+        return None
+    return data
+
+
+def _voice_cache_matches(data: dict, expected: dict) -> bool:
+    for key in ("cache_schema", "audio_sha256", "audio_bytes", "target_model"):
+        if expected.get(key) is not None and data.get(key) != expected.get(key):
+            return False
+    expected_duration = expected.get("audio_duration_s")
+    cached_duration = data.get("audio_duration_s")
+    if expected_duration is not None:
+        if cached_duration is None:
+            return False
+        try:
+            if abs(float(cached_duration) - float(expected_duration)) > 0.25:
+                return False
+        except (TypeError, ValueError):
+            return False
+    return True
 
 
 def write_voice_cache(cache_key: str, payload: dict) -> None:

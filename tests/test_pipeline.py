@@ -31,7 +31,7 @@ def test_convert_audio_prefers_voice_matched(monkeypatch, tmp_path):
         },
     )
     monkeypatch.setattr(pipeline, "voice_cache_key", lambda path, model: "cache")
-    monkeypatch.setattr(pipeline, "read_voice_cache", lambda key: None)
+    monkeypatch.setattr(pipeline, "read_voice_cache", lambda key, expected=None: None)
     monkeypatch.setattr(pipeline, "write_voice_cache", lambda key, payload: None)
     monkeypatch.setattr(pipeline, "enroll_voice", lambda path: "voice-1")
 
@@ -74,6 +74,81 @@ def test_build_tts_instruction_keeps_dialect_and_caps_length():
     assert len(instruction) <= 95
 
 
+def test_build_tts_instruction_can_target_reference_duration():
+    instruction = pipeline.build_tts_instruction(
+        "cantonese",
+        "\u8bed\u6c14\u81ea\u7136\uff0c\u8282\u594f\u5e73\u7a33",
+        8.576,
+    )
+
+    assert instruction.startswith("\u8bf7\u7528\u5e7f\u4e1c\u8bdd\u8868\u8fbe")
+    assert "\u8d34\u8fd1\u53c2\u8003\u5f55\u97f3\u8bed\u901f" in instruction
+    assert "\u7ea68.6\u79d2\u8bfb\u5b8c" in instruction
+    assert len(instruction) <= 95
+
+
+def test_convert_audio_retries_voice_matched_when_too_slow(monkeypatch, tmp_path):
+    audio = tmp_path / "ref.wav"
+    audio.write_bytes(b"fake-audio")
+    synth_calls = []
+    measured_durations = iter([10.9, 8.7])
+
+    monkeypatch.setattr(pipeline, "cleanup_runtime", lambda: 0)
+    monkeypatch.setattr(pipeline, "transcribe_audio", lambda path: "\u5404\u4f4d\u8bc4\u59d4\u8001\u5e08\u4f60\u4eec\u597d")
+    monkeypatch.setattr(
+        pipeline,
+        "analyze_expression",
+        lambda text: {
+            "display_text": "\u5404\u4f4d\u8bc4\u59d4\u8001\u5e08\u4f60\u4eec\u597d\u3002",
+            "emotion_label": "\u81ea\u7136",
+            "prosody_instruction": "\u8bed\u6c14\u81ea\u7136\uff0c\u8282\u594f\u5e73\u7a33",
+        },
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "rewrite_to_dialect",
+        lambda text, dialect, expression=None, rag_context="": {
+            "dialect_text": "\u5404\u4f4d\u8bc4\u59d4\u8001\u5e08\uff0c\u5927\u5bb6\u597d\u3002",
+            "pronunciation_note": "",
+        },
+    )
+    monkeypatch.setattr(pipeline, "voice_cache_key", lambda path, model: "cache")
+    monkeypatch.setattr(
+        pipeline,
+        "voice_cache_metadata",
+        lambda path, model, duration_s=None: {
+            "cache_schema": 2,
+            "audio_sha256": "sha",
+            "audio_bytes": 10,
+            "target_model": model,
+            "audio_duration_s": round(duration_s, 3),
+        },
+    )
+    monkeypatch.setattr(pipeline, "read_voice_cache", lambda key, expected=None: None)
+    monkeypatch.setattr(pipeline, "write_voice_cache", lambda key, payload: None)
+    monkeypatch.setattr(pipeline, "enroll_voice", lambda path: "voice-1")
+    monkeypatch.setattr(
+        pipeline,
+        "audio_duration_seconds",
+        lambda path: next(measured_durations) if "voice_matched" in path.name else None,
+    )
+
+    def fake_synth(text, output_path, *, voice, model=None, instruction=None, language_hint="zh"):
+        synth_calls.append({"voice": voice, "instruction": instruction})
+        output_path.with_suffix(".mp3").write_bytes(b"fake")
+        return f"/media/{output_path.name}-{len(synth_calls)}.mp3"
+
+    monkeypatch.setattr(pipeline, "synthesize", fake_synth)
+
+    result = pipeline.convert_audio("job", audio, "cantonese", reference_duration_s=8.576)
+
+    voice_calls = [call for call in synth_calls if call["voice"] == "voice-1"]
+    assert len(voice_calls) == 2
+    assert "\u7ea68.6\u79d2\u8bfb\u5b8c" in voice_calls[0]["instruction"]
+    assert "\u8bed\u901f\u52a0\u5feb" in voice_calls[1]["instruction"]
+    assert result.voice_matched_audio_url == "/media/job_voice_matched.mp3-3.mp3"
+
+
 def test_convert_audio_translates_audio_short_warning(monkeypatch, tmp_path):
     audio = tmp_path / "ref.wav"
     audio.write_bytes(b"fake-audio")
@@ -95,7 +170,7 @@ def test_convert_audio_translates_audio_short_warning(monkeypatch, tmp_path):
         lambda text, dialect, expression=None, rag_context="": {"dialect_text": "\u4f60\u597d\u3002", "pronunciation_note": ""},
     )
     monkeypatch.setattr(pipeline, "voice_cache_key", lambda path, model: "cache")
-    monkeypatch.setattr(pipeline, "read_voice_cache", lambda key: None)
+    monkeypatch.setattr(pipeline, "read_voice_cache", lambda key, expected=None: None)
     monkeypatch.setattr(pipeline, "enroll_voice", lambda path: "voice-1")
     monkeypatch.setattr(pipeline, "settings", type("Settings", (), {**pipeline.settings.__dict__, "ref_audio_min_s": 8})())
 

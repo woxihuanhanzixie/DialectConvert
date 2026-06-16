@@ -35,7 +35,7 @@
 | ASR | DashScope `paraformer-v2` | 将上传音频转写为中文文本 |
 | LLM | DashScope OpenAI-compatible `qwen3.7-max` | 恢复标点、提取情绪语调、生成方言口语文本 |
 | 标准 TTS | DashScope CosyVoice `cosyvoice-v3-plus` | 生成系统音色的 Gold Teacher 方言音频 |
-| 音色注册 | DashScope `voice-enrollment` | 根据 10-20 秒参考音频创建或复用 `voice_id` |
+| 音色注册 | DashScope `voice-enrollment` | 根据参考音频创建或复用绑定音频指纹的 `voice_id` |
 | 音色复刻 TTS | DashScope CosyVoice `cosyvoice-v3.5-plus` | 使用已注册音色生成 Voice Matched 方言音频 |
 | 方言控制 | CosyVoice `instruction` | 使用“请用广东话/四川话/闽南话表达”等短指令控制发音 |
 
@@ -70,9 +70,9 @@ flowchart TD
 4. 调用 `analyze_expression` 恢复标点、生成 `emotion_label` 和 `prosody_instruction`。
 5. 调用 RAG 检索方言词汇/习惯表达，作为改写 prompt 的参考上下文。
 6. 调用 `rewrite_to_dialect` 生成目标方言口语文本。
-7. 调用 `build_tts_instruction` 合并方言指令和情绪语调，例如“请用广东话表达，语气焦急，停顿更短。”。
-8. 先生成 Gold Teacher，再注册或复用用户音色。
-9. 使用同一段方言文本和同一条短指令合成 Voice Matched。
+7. 调用 `build_tts_instruction` 合并方言指令、参考录音时长和情绪语调，例如“请用广东话表达，贴近参考录音语速，约 8.6 秒读完，语气自然。”。
+8. 先生成 Gold Teacher，再注册或复用与本次音频 SHA256、字节数、时长和 target model 匹配的用户音色缓存。
+9. 使用同一段方言文本和短指令合成 Voice Matched；若输出明显慢于参考录音，会自动用更快语速指令重试一次。
 10. 前端优先推荐 Voice Matched；失败时保留 Gold Teacher 并展示警告。
 
 ## 旧本地链路与失败经验
@@ -271,9 +271,9 @@ pytest -q
 - FastAPI 转换接口和错误清洗。
 - 主链路 Voice Matched 优先级和 Gold Teacher 回退。
 - 已注册音色继续合成。
-- 运行时缓存清理和音色缓存 TTL。
+- 运行时缓存清理、音色缓存 TTL 和音频指纹校验。
 - 移动端音频扩展名识别。
-- CosyVoice 方言与情绪 instruction 拼接。
+- CosyVoice 方言、参考语速与情绪 instruction 拼接。
 
 ## 部署
 
@@ -299,7 +299,8 @@ ssh -i ~/.ssh/dialectconvert_key.pem root@43.139.53.84 "systemctl is-active dial
 - 不在日志、README、提交信息或 issue 中暴露真实密钥。
 - `runtime_data/` 已被 `.gitignore` 排除。
 - 服务器磁盘有限时，依赖 `cleanup_runtime`、`CLEANUP_AFTER_HOURS` 和 `VOICE_CACHE_TTL_HOURS` 控制增长。
-- CosyVoice `instruction` 应保持短句，避免超长指令影响方言输出或触发接口限制。
+- CosyVoice `instruction` 应保持短句，当前按中文字符加权控制在 95 字符以内，避免超长指令影响方言输出或触发接口限制。
+- 音色缓存必须匹配上传音频 SHA256、字节数、参考时长和目标模型；旧 schema 或元数据不匹配的缓存不会复用。
 - `voice_id` 是可复用音色标识，应按运行数据管理，不作为公开示例写入仓库。
 
 ## 当前边界

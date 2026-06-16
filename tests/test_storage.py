@@ -29,6 +29,35 @@ def test_new_job_id_is_sortable_and_non_sensitive():
     assert "audio" not in job_id.lower()
 
 
+def test_voice_cache_requires_audio_metadata_match(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        storage,
+        "settings",
+        SimpleNamespace(
+            upload_dir=tmp_path / "uploads",
+            output_dir=tmp_path / "outputs",
+            metadata_dir=tmp_path / "jobs",
+            cache_dir=tmp_path / "voice_cache",
+            cleanup_after_hours=1,
+            voice_cache_ttl_hours=1,
+        ),
+    )
+    storage.ensure_dirs()
+
+    audio = tmp_path / "ref.wav"
+    audio.write_bytes(b"fake-audio")
+    expected = storage.voice_cache_metadata(audio, "cosyvoice-v3.5-plus", 8.576)
+
+    storage.write_voice_cache("legacy", {"status": "ok", "voice_id": "voice-old"})
+    assert storage.read_voice_cache("legacy", expected=expected) is None
+
+    storage.write_voice_cache("current", {**expected, "status": "ok", "voice_id": "voice-new"})
+    assert storage.read_voice_cache("current", expected=expected)["voice_id"] == "voice-new"
+
+    mismatched = {**expected, "audio_duration_s": 10.8}
+    assert storage.read_voice_cache("current", expected=mismatched) is None
+
+
 def test_cleanup_runtime_removes_old_media_and_job_metadata(monkeypatch, tmp_path):
     monkeypatch.setattr(
         storage,
