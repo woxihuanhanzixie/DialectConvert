@@ -84,7 +84,7 @@ def _is_too_slow_for_reference(output_path: Path, reference_duration_s: float | 
     output_duration_s = audio_duration_seconds(output_path)
     if output_duration_s is None:
         return False
-    return output_duration_s > max(reference_duration_s * 1.15, reference_duration_s + 0.75)
+    return output_duration_s > max(reference_duration_s * 1.08, reference_duration_s + 0.4)
 
 
 def convert_audio(

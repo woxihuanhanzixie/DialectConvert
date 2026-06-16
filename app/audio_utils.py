@@ -58,12 +58,12 @@ def make_browser_preview_audio(source_path: Path, target_path: Path) -> tuple[Pa
     return target_path, duration or audio_duration_seconds(target_path)
 
 
-def speed_audio_to_duration(path: Path, target_duration_s: float, *, tolerance_ratio: float = 0.15) -> float | None:
+def speed_audio_to_duration(path: Path, target_duration_s: float, *, tolerance_ratio: float = 0.08) -> float | None:
     """Speed up an audio file in-place when it is clearly slower than the target."""
     current_duration = audio_duration_seconds(path)
     if current_duration is None or target_duration_s <= 0:
         return current_duration
-    if current_duration <= max(target_duration_s * (1 + tolerance_ratio), target_duration_s + 0.75):
+    if current_duration <= max(target_duration_s * (1 + tolerance_ratio), target_duration_s + 0.4):
         return current_duration
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
