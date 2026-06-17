@@ -100,6 +100,16 @@ def versioned_index_head() -> Response:
     return _frontend_head_response()
 
 
+@app.get("/v/{requested_version}")
+def legacy_versioned_index(requested_version: str) -> FileResponse:
+    return _frontend_response()
+
+
+@app.head("/v/{requested_version}")
+def legacy_versioned_index_head(requested_version: str) -> Response:
+    return _frontend_head_response()
+
+
 @app.get("/health", response_model=HealthResult)
 def health() -> HealthResult:
     static_dir = ROOT_DIR / "static"

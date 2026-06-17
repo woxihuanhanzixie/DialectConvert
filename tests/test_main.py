@@ -66,12 +66,17 @@ def test_versioned_frontend_paths_bypass_stale_webview_cache():
     page = client.get("/v/20260617-community-v1")
     app_js = client.get("/assets/20260617-community-v1/app.js")
     styles = client.get("/assets/20260617-community-v1/styles.css")
+    old_page = client.get("/v/20260615-frontend-v5")
+    old_head = client.head("/v/20260615-frontend-v5")
 
     assert page.status_code == 200
     assert app_js.status_code == 200
     assert styles.status_code == 200
+    assert old_page.status_code == 200
+    assert old_head.status_code == 200
     assert "no-store" in page.headers["cache-control"]
     assert 'id="convertForm"' in page.text
+    assert 'id="convertForm"' in old_page.text
     assert 'document.querySelector("#convertForm")' in app_js.text
     assert ".app-shell" in styles.text
 
