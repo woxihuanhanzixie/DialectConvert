@@ -71,14 +71,33 @@ def _frontend_response() -> FileResponse:
     return response
 
 
+def _frontend_head_response() -> Response:
+    response = Response(status_code=200)
+    response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    response.headers["Content-Type"] = "text/html; charset=utf-8"
+    return response
+
+
 @app.get("/")
 def index() -> FileResponse:
     return _frontend_response()
 
 
+@app.head("/")
+def index_head() -> Response:
+    return _frontend_head_response()
+
+
 @app.get(f"/v/{FRONTEND_VERSION}")
 def versioned_index() -> FileResponse:
     return _frontend_response()
+
+
+@app.head(f"/v/{FRONTEND_VERSION}")
+def versioned_index_head() -> Response:
+    return _frontend_head_response()
 
 
 @app.get("/health", response_model=HealthResult)
