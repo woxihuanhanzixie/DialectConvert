@@ -36,7 +36,7 @@ def test_frontend_static_assets_are_served():
     assert 'id="convertForm"' in index_response.text
     assert "/assets/20260617-community-v1/app.js" in index_response.text
     assert "/assets/20260617-community-v1/styles.css" in index_response.text
-    assert "/v/20260617-community-v1" in index_response.text
+    assert "http://43.139.53.84/" in index_response.text
     assert 'id="communityPanel"' in index_response.text
     assert "no-store" in index_response.headers["cache-control"]
     assert "no-cache" in index_response.headers["cache-control"]
