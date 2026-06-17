@@ -16,7 +16,7 @@ from .pipeline import convert_audio, speak_with_registered_voice
 from .storage import ALLOWED_AUDIO_EXTS, ensure_dirs, new_job_id, public_url_for, save_upload, update_job_metadata
 
 
-FRONTEND_VERSION = "20260615-frontend-v5"
+FRONTEND_VERSION = "20260617-demo-v1"
 
 ensure_dirs()
 
@@ -126,6 +126,7 @@ async def convert(
                 "has_gold_audio": bool(result.gold_audio_url),
                 "has_voice_matched_audio": bool(result.voice_matched_audio_url),
                 "warning_count": len(result.warnings),
+                "timings_ms": getattr(result, "timings_ms", {}),
             },
         )
         if not result.recommended_audio_url:

@@ -34,9 +34,9 @@ def test_frontend_static_assets_are_served():
 
     assert index_response.status_code == 200
     assert 'id="convertForm"' in index_response.text
-    assert "/assets/20260615-frontend-v5/app.js" in index_response.text
-    assert "/assets/20260615-frontend-v5/styles.css" in index_response.text
-    assert "/v/20260615-frontend-v5" in index_response.text
+    assert "/assets/20260617-demo-v1/app.js" in index_response.text
+    assert "/assets/20260617-demo-v1/styles.css" in index_response.text
+    assert "/v/20260617-demo-v1" in index_response.text
     assert "no-store" in index_response.headers["cache-control"]
     assert "no-cache" in index_response.headers["cache-control"]
 
@@ -45,20 +45,24 @@ def test_frontend_static_assets_are_served():
     assert "no-cache" in app_js_response.headers["cache-control"]
     assert 'document.querySelector("#convertForm")' in app_js_response.text
     assert "form.addEventListener" in app_js_response.text
+    assert "demo-processing" in app_js_response.text
+    assert "skeleton-spinner" not in app_js_response.text
 
     assert styles_response.status_code == 200
     assert "no-store" in styles_response.headers["cache-control"]
     assert "no-cache" in styles_response.headers["cache-control"]
     assert ".app-shell" in styles_response.text
     assert ".primary" in styles_response.text
+    assert ".demo-processing" in styles_response.text
+    assert "spin 0.8s" not in styles_response.text
 
 
 def test_versioned_frontend_paths_bypass_stale_webview_cache():
     client = TestClient(app)
 
-    page = client.get("/v/20260615-frontend-v5")
-    app_js = client.get("/assets/20260615-frontend-v5/app.js")
-    styles = client.get("/assets/20260615-frontend-v5/styles.css")
+    page = client.get("/v/20260617-demo-v1")
+    app_js = client.get("/assets/20260617-demo-v1/app.js")
+    styles = client.get("/assets/20260617-demo-v1/styles.css")
 
     assert page.status_code == 200
     assert app_js.status_code == 200
@@ -89,7 +93,11 @@ def test_convert_internal_errors_are_sanitized(monkeypatch, tmp_path):
 
     monkeypatch.setattr(main, "save_upload", fake_save_upload)
     monkeypatch.setattr(main, "ensure_reference_audio_duration", lambda path: 2.0)
-    monkeypatch.setattr(main, "convert_audio", lambda job_id, path, dialect: (_ for _ in ()).throw(RuntimeError("raw backend error")))
+    monkeypatch.setattr(
+        main,
+        "convert_audio",
+        lambda job_id, path, dialect, duration_s=None: (_ for _ in ()).throw(RuntimeError("raw backend error")),
+    )
 
     with TestClient(app) as client:
         response = client.post(
@@ -115,12 +123,13 @@ def test_convert_without_playable_audio_is_sanitized(monkeypatch, tmp_path):
     monkeypatch.setattr(
         main,
         "convert_audio",
-        lambda job_id, path, dialect: SimpleNamespace(
+        lambda job_id, path, dialect, duration_s=None: SimpleNamespace(
             status="failed",
             recommended_audio_url=None,
             gold_audio_url=None,
             voice_matched_audio_url=None,
             warnings=["raw provider warning"],
+            timings_ms={},
         ),
     )
 

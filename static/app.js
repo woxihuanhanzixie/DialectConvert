@@ -372,10 +372,10 @@ function stopTimer() {
 function renderMessage(message, level = "empty") {
   if (level === "loading") {
     result.innerHTML = `
-      <div class="empty-state is-loading">
-        <div class="skeleton-spinner"></div>
+      <div class="demo-processing" aria-busy="true">
+        <div class="demo-processing-mark" aria-hidden="true">成</div>
         <p>${escapeHtml(message)}</p>
-        <span>请在生成过程中保持页面打开</span>
+        <span>后台正在完成 ASR、方言改写和音色生成，可继续展示产品场景。</span>
       </div>`;
     return;
   }
@@ -955,17 +955,10 @@ form.addEventListener("submit", async (event) => {
   }
 
   submitBtn.disabled = true;
-  submitBtn.querySelector("span").textContent = "正在生成…";
+  submitBtn.querySelector("span").textContent = "生成流程运行中";
   serviceState.textContent = "Processing";
-  renderMessage("正在识别、方言化和复刻音色，请保持页面打开。", "loading");
-  setStep(0);
-
-  const progress = [1, 2, 3];
-  let progressIndex = 0;
-  const progressTimer = window.setInterval(() => {
-    setStep(progress[progressIndex] ?? 3);
-    progressIndex = Math.min(progressIndex + 1, progress.length - 1);
-  }, 1800);
+  renderMessage("产品生成流程已启动，正在完成语音识别、方言改写与音色合成。", "loading");
+  setStep(4);
 
   try {
     const selectedDialect = form.querySelector('input[name="dialect"]:checked')?.value || "cantonese";
@@ -983,7 +976,6 @@ form.addEventListener("submit", async (event) => {
     serviceState.textContent = "Error";
     renderMessage(error.message, "warn");
   } finally {
-    window.clearInterval(progressTimer);
     submitBtn.disabled = false;
     submitBtn.querySelector("span").textContent = "生成我的方言音色";
   }

@@ -22,6 +22,7 @@ class ConversionResult(BaseModel):
     voice_id: str | None = None
     status: str = "ok"
     warnings: list[str] = Field(default_factory=list)
+    timings_ms: dict[str, int] = Field(default_factory=dict)
 
 
 class RegisteredVoiceSpeakResult(BaseModel):

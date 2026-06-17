@@ -134,6 +134,7 @@ ASR → analyze_expression → retrieve_dialect_knowledge → rewrite_to_dialect
 - `runtime_data/uploads` / `outputs` / `jobs` / `voice_cache`。
 - `cleanup_runtime`、`CLEANUP_AFTER_HOURS`、`VOICE_CACHE_TTL_HOURS` 控制磁盘增长。
 - 音色缓存 schema v2 绑定 `audio_sha256`、`audio_bytes`、`audio_duration_s` 和 `target_model`；旧 schema 或元数据不匹配不会复用。
+- `/api/convert` 响应和任务 metadata 会写入 `timings_ms`，用于排查 ASR、LLM、TTS、音色注册和音频校正的分阶段耗时。
 - `ENABLE_MOCK_WHEN_NO_KEY=1` 只用于无密钥本地演示或测试。
 
 ## 部署约定

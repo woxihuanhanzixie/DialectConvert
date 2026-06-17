@@ -61,6 +61,10 @@ def test_convert_audio_prefers_voice_matched(monkeypatch, tmp_path):
         "\u8bf7\u7528\u56db\u5ddd\u8bdd\u8868\u8fbe\uff0c\u8bed\u6c14\u5938\u5f20\uff0c\u5c3e\u97f3\u4e0a\u626c\u3002"
     }
     assert {call["language_hint"] for call in synth_calls} == {"zh"}
+    assert result.timings_ms["asr"] >= 0
+    assert result.timings_ms["dialect_rewrite"] >= 0
+    assert result.timings_ms["voice_tts"] >= 0
+    assert result.timings_ms["total"] >= 0
 
 
 def test_build_tts_instruction_keeps_dialect_and_caps_length():
@@ -154,6 +158,8 @@ def test_convert_audio_retries_voice_matched_when_too_slow(monkeypatch, tmp_path
     assert "\u8bed\u901f\u52a0\u5feb" in voice_calls[1]["instruction"]
     assert speed_calls == [("job_voice_matched.mp3", 8.576)]
     assert result.voice_matched_audio_url == "/media/job_voice_matched.mp3-3.mp3"
+    assert result.timings_ms["voice_tts_retry"] >= 0
+    assert result.timings_ms["voice_speed_fix"] >= 0
 
 
 def test_convert_audio_translates_audio_short_warning(monkeypatch, tmp_path):
