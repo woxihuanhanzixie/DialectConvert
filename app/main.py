@@ -10,15 +10,31 @@ from starlette.responses import Response
 from starlette.concurrency import run_in_threadpool
 
 from .audio_utils import ensure_reference_audio_duration, make_browser_preview_audio
+from .community import (
+    add_comment,
+    create_post,
+    list_posts,
+    list_scenes,
+    react_to_post,
+    seed_posts_if_empty,
+    submit_correction,
+)
 from .config import ROOT_DIR, settings
-from .models import HealthResult
+from .models import (
+    CommunityCommentCreate,
+    CommunityCorrectionCreate,
+    CommunityPostCreate,
+    CommunityReaction,
+    HealthResult,
+)
 from .pipeline import convert_audio, speak_with_registered_voice
 from .storage import ALLOWED_AUDIO_EXTS, ensure_dirs, new_job_id, public_url_for, save_upload, update_job_metadata
 
 
-FRONTEND_VERSION = "20260617-demo-v1"
+FRONTEND_VERSION = "20260617-community-v1"
 
 ensure_dirs()
+seed_posts_if_empty()
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
 
@@ -89,6 +105,55 @@ def audio_limits() -> dict[str, int]:
         "min_seconds": settings.ref_audio_min_s,
         "max_seconds": settings.ref_audio_max_s,
     }
+
+
+@app.get("/api/community/scenes")
+def community_scenes() -> dict[str, list[dict]]:
+    return {"scenes": list_scenes()}
+
+
+@app.get("/api/community/posts")
+def community_posts(scene: str | None = None, limit: int = 40) -> dict[str, list[dict]]:
+    return {"posts": list_posts(scene=scene, limit=limit)}
+
+
+@app.post("/api/community/posts")
+def community_create_post(payload: CommunityPostCreate) -> dict:
+    try:
+        post = create_post(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return post
+
+
+@app.post("/api/community/posts/{post_id}/reactions")
+def community_react(post_id: str, payload: CommunityReaction) -> dict:
+    try:
+        return react_to_post(post_id, payload.action)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/community/posts/{post_id}/comments")
+def community_comment(post_id: str, payload: CommunityCommentCreate) -> dict:
+    try:
+        return add_comment(post_id, payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/community/posts/{post_id}/corrections")
+def community_correction(post_id: str, payload: CommunityCorrectionCreate) -> dict:
+    try:
+        return submit_correction(post_id, payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 def _is_supported_upload(upload: UploadFile) -> bool:

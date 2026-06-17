@@ -80,6 +80,7 @@ class Settings:
     upload_dir: Path = data_dir / "uploads"
     output_dir: Path = data_dir / "outputs"
     metadata_dir: Path = data_dir / "jobs"
+    community_dir: Path = data_dir / "community"
     cache_dir: Path = _runtime_path_env("QWEN_VOICE_CACHE_DIR", data_dir / "voice_cache")
     max_upload_mb: int = _int_env("MAX_UPLOAD_MB", 30)
     cleanup_after_hours: int = _int_env("CLEANUP_AFTER_HOURS", 24)

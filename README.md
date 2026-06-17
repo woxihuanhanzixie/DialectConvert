@@ -1,8 +1,8 @@
 # 声临其境：濒危方言的声音复刻与活化平台
 
-“声临其境”是一个面向方言保护、学习和传播的 AI Web 应用。用户在手机或电脑上录制或上传一段参考语音，系统会完成语音识别、标点与情绪语调分析、方言口语化改写、音色注册和方言语音合成，最终输出带有用户音色的粤语、四川话或闽南话语音。
+“声临其境”是一个面向方言保护、学习和传播的 AI Web 应用。用户在手机或电脑上录制或上传一段参考语音，系统会完成语音识别、标点与情绪语调分析、方言口语化改写、音色注册和方言语音合成，最终输出带有用户音色的粤语、四川话或闽南话语音，并可发布为“乡音数字分身”社区作品。
 
-项目定位不是简单的“文字转方言”，而是把语义、方言表达、情绪语调和个人音色串成一条可演示、可部署、可继续扩展的闭环。
+项目定位不是简单的“文字转方言”，而是把语义、方言表达、情绪语调、个人音色和社区共创串成一条可演示、可部署、可继续扩展的活态方言保护闭环。
 
 ## 项目信息
 
@@ -25,6 +25,8 @@
 - 使用 voice enrollment 注册或复用用户音色。
 - 同时输出系统音色的 Gold Teacher 和用户音色的 Voice Matched。
 - Voice Matched 成功后，可继续输入文本并复用已注册音色再次合成。
+- 四个场景社区入口：Z 世代社交、乡音陪伴、乡村振兴、侨乡寻根。
+- 支持发布乡音数字分身作品、点赞收藏、评论和“更地道说法”候选提交。
 
 ## 使用的模型与服务
 
@@ -60,6 +62,8 @@ flowchart TD
     H --> J[前端展示标准方言音频]
     I --> K[前端展示克隆用户音色音频]
     K --> L[复用 voice_id 继续文本合成]
+    K --> M[发布乡音数字分身社区作品]
+    M --> N[评论/纠错进入候选语料池]
 ```
 
 实际后端编排在 [app/pipeline.py](app/pipeline.py) 中，核心顺序是：
@@ -74,6 +78,7 @@ flowchart TD
 8. 先生成 Gold Teacher，再注册或复用与本次音频 SHA256、字节数、时长和 target model 匹配的用户音色缓存。
 9. 使用同一段方言文本和短指令合成 Voice Matched；若输出明显慢于参考录音，会自动用更快语速指令重试一次，仍过慢则用 `ffmpeg atempo` 对最终 MP3 做轻量时长校准。
 10. 前端优先推荐 Voice Matched；失败时保留 Gold Teacher 并展示警告。
+11. 用户可将生成结果发布到方言数字人社区，评论与纠错先进入候选池，审核后再反哺 RAG/知识图谱。
 
 ## 旧本地链路与失败经验
 
@@ -247,6 +252,16 @@ curl http://127.0.0.1:7860/health
 - `dialect`：目标方言。
 - `voice_id`：上一次转换返回的音色 ID。
 - `text`：要朗读的文本，当前限制 180 字以内。
+
+### `GET/POST /api/community/posts`
+
+轻量方言数字人社区接口。帖子保存在 `runtime_data/community/posts.json`，适合比赛演示和小规模内测。
+
+- `GET /api/community/posts?scene=youth`：按场景读取作品流。
+- `POST /api/community/posts`：创建乡音数字分身作品，字段包括 `scene`、`dialect`、`title`、`body`、`source_text`、`dialect_text`、`audio_url`。
+- `POST /api/community/posts/{post_id}/reactions`：点赞或收藏。
+- `POST /api/community/posts/{post_id}/comments`：添加评论。
+- `POST /api/community/posts/{post_id}/corrections`：提交“更地道说法”候选，写入 `corrections.json`，不直接进入正式 RAG。
 
 ## 移动端录音适配
 

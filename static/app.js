@@ -24,6 +24,29 @@ const voiceTextInput = document.querySelector("#voiceTextInput");
 const voiceSpeakBtn = document.querySelector("#voiceSpeakBtn");
 const voiceModalOutput = document.querySelector("#voiceModalOutput");
 const voiceMascot = document.querySelector("#voiceMascot");
+const sceneCards = [...document.querySelectorAll(".scene-card")];
+const communityPanel = document.querySelector("#communityPanel");
+const communityEyebrow = document.querySelector("#communityEyebrow");
+const communityTitle = document.querySelector("#communityTitle");
+const communityPrompt = document.querySelector("#communityPrompt");
+const communityFeed = document.querySelector("#communityFeed");
+const openPublishBtn = document.querySelector("#openPublishBtn");
+const communityModal = document.querySelector("#communityModal");
+const communityModalClose = document.querySelector("#communityModalClose");
+const communityModalTitle = document.querySelector("#communityModalTitle");
+const communityModalOutput = document.querySelector("#communityModalOutput");
+const postTitleInput = document.querySelector("#postTitleInput");
+const postBodyInput = document.querySelector("#postBodyInput");
+const postDialectTextInput = document.querySelector("#postDialectTextInput");
+const postSceneInput = document.querySelector("#postSceneInput");
+const postDialectInput = document.querySelector("#postDialectInput");
+const publishPostBtn = document.querySelector("#publishPostBtn");
+const correctionModal = document.querySelector("#correctionModal");
+const correctionModalClose = document.querySelector("#correctionModalClose");
+const correctionSuggestionInput = document.querySelector("#correctionSuggestionInput");
+const correctionNoteInput = document.querySelector("#correctionNoteInput");
+const correctionModalOutput = document.querySelector("#correctionModalOutput");
+const submitCorrectionBtn = document.querySelector("#submitCorrectionBtn");
 const DEFAULT_MIN_AUDIO_SECONDS = 10;
 const DEFAULT_MAX_AUDIO_SECONDS = 20;
 
@@ -52,15 +75,50 @@ const state = {
     maxSeconds: DEFAULT_MAX_AUDIO_SECONDS,
   },
   registeredVoice: null,
+  lastResult: null,
   previewRequestId: 0,
   mascotDrag: null,
   mascotMoved: false,
+  communityScene: "youth",
+  correctionPostId: "",
+  publishFromResult: false,
 };
 
 const dialectNames = {
   cantonese: "粤语",
   sichuanese: "四川话",
   hokkien: "闽南话",
+};
+
+const sceneMeta = {
+  youth: {
+    label: "Z世代社交",
+    title: "校园里的第一条方言数字人作品",
+    prompt: "方言表情包、宿舍配音、校园挑战榜",
+    avatar: "🌱",
+    persona: "校园方言玩家",
+  },
+  elder: {
+    label: "乡音陪伴",
+    title: "用亲人的声音，把问候留在身边",
+    prompt: "亲人声音数字人、方言童谣、怀旧问候模板",
+    avatar: "🧓",
+    persona: "亲情陪伴数字人",
+  },
+  village: {
+    label: "乡村振兴",
+    title: "让古村导览开口说本地话",
+    prompt: "AI 方言导览员、文旅讲解、农产品 IP 配音",
+    avatar: "🏡",
+    persona: "古村方言导览员",
+  },
+  overseas: {
+    label: "侨乡寻根",
+    title: "跨越时差的第一句祖辈乡音",
+    prompt: "海外华侨乡音地图、祖辈故事、侨校方言学习卡",
+    avatar: "🌏",
+    persona: "侨乡寻根数字分身",
+  },
 };
 
 const recorderTypes = [
@@ -166,6 +224,29 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || "请求失败");
+  return data;
+}
+
+function formatDateTime(seconds) {
+  if (!seconds) return "刚刚";
+  const date = new Date(seconds * 1000);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${month}-${day} ${hour}:${minute}`;
 }
 
 function setStep(activeIndex) {
@@ -704,6 +785,182 @@ function closeVoiceModal() {
   voiceModal.hidden = true;
 }
 
+function updateCommunityHeader(scene) {
+  const meta = sceneMeta[scene] || sceneMeta.youth;
+  communityEyebrow.textContent = meta.label;
+  communityTitle.textContent = meta.title;
+  communityPrompt.textContent = meta.prompt;
+  sceneCards.forEach((card) => card.classList.toggle("is-selected", card.dataset.scene === scene));
+}
+
+function communityAvatar(post) {
+  const scene = sceneMeta[post.scene] || sceneMeta.youth;
+  const avatarMap = {
+    sprout: "木",
+    leaf: "🌱",
+    home: "🧓",
+    guide: "🏡",
+    map: "🌏",
+  };
+  return avatarMap[post.avatar] || scene.avatar || "木";
+}
+
+function renderCommunityPost(post) {
+  const dialectLabel = dialectNames[post.dialect] || "方言";
+  const comments = (post.comments || []).slice(-2);
+  return `
+    <article class="community-post" data-post-id="${escapeHtml(post.id)}">
+      <div class="post-avatar" aria-hidden="true">${escapeHtml(communityAvatar(post))}</div>
+      <div class="post-body">
+        <div class="post-meta">
+          <span>${escapeHtml(post.persona || "乡音数字分身")}</span>
+          <span>${escapeHtml(dialectLabel)}</span>
+          <span>${escapeHtml(formatDateTime(post.created_at))}</span>
+        </div>
+        <h3>${escapeHtml(post.title || "未命名乡音作品")}</h3>
+        ${post.body ? `<p class="post-desc">${escapeHtml(post.body)}</p>` : ""}
+        ${
+          post.source_text
+            ? `<div class="post-line"><span>原文</span><p>${escapeHtml(post.source_text)}</p></div>`
+            : ""
+        }
+        ${
+          post.dialect_text
+            ? `<div class="post-line is-dialect"><span>方言台词</span><p>${escapeHtml(post.dialect_text)}</p></div>`
+            : ""
+        }
+        ${post.audio_url ? `<audio class="post-audio" src="${escapeHtml(post.audio_url)}" controls preload="metadata"></audio>` : ""}
+        <div class="post-actions">
+          <button type="button" data-action="like">赞 ${Number(post.likes || 0)}</button>
+          <button type="button" data-action="bookmark">收藏 ${Number(post.bookmarks || 0)}</button>
+          <button type="button" data-action="correct">贡献说法 ${Number(post.corrections || 0)}</button>
+        </div>
+        <form class="comment-form">
+          <input maxlength="160" placeholder="留一句评论或使用场景建议" />
+          <button type="submit">评论</button>
+        </form>
+        ${
+          comments.length
+            ? `<div class="post-comments">${comments
+                .map((comment) => `<p><strong>${escapeHtml(comment.author || "社区成员")}</strong>${escapeHtml(comment.text)}</p>`)
+                .join("")}</div>`
+            : ""
+        }
+      </div>
+    </article>`;
+}
+
+async function loadCommunity(scene = state.communityScene) {
+  state.communityScene = scene;
+  updateCommunityHeader(scene);
+  communityFeed.innerHTML = `<div class="community-empty">正在加载乡音作品...</div>`;
+  try {
+    const data = await fetchJson(`/api/community/posts?scene=${encodeURIComponent(scene)}`);
+    const posts = data.posts || [];
+    communityFeed.innerHTML = posts.length
+      ? posts.map(renderCommunityPost).join("")
+      : `<div class="community-empty">这个社区还没有作品，发布第一条乡音数字分身。</div>`;
+  } catch (error) {
+    communityFeed.innerHTML = `<div class="warn-card"><p>${escapeHtml(error.message || serverBusyMessage())}</p></div>`;
+  }
+}
+
+function openCommunityModal(fromResult = false) {
+  state.publishFromResult = fromResult;
+  const meta = sceneMeta[state.communityScene] || sceneMeta.youth;
+  const data = fromResult ? state.lastResult : null;
+  communityModalTitle.textContent = fromResult ? "发布刚生成的音色作品" : "发布到社区";
+  postSceneInput.value = state.communityScene;
+  postDialectInput.value =
+    data?.dialect || form.querySelector('input[name="dialect"]:checked')?.value || "cantonese";
+  postTitleInput.value = data ? `${dialectNames[data.dialect] || "方言"}音色作品` : "";
+  postBodyInput.value = data ? `一个适合${meta.label}场景的乡音数字分身作品。` : "";
+  postDialectTextInput.value = data?.dialect_text || "";
+  communityModalOutput.innerHTML = data?.recommended_audio_url
+    ? `<span>已带入刚生成的音频，发布后会作为作品播放器展示。</span>`
+    : "";
+  communityModal.hidden = false;
+  postTitleInput.focus();
+}
+
+function closeCommunityModal() {
+  communityModal.hidden = true;
+  communityModalOutput.innerHTML = "";
+  state.publishFromResult = false;
+}
+
+async function publishCommunityPost() {
+  const scene = postSceneInput.value;
+  const meta = sceneMeta[scene] || sceneMeta.youth;
+  const data = state.publishFromResult ? state.lastResult : null;
+  const payload = {
+    scene,
+    dialect: postDialectInput.value,
+    title: postTitleInput.value,
+    body: postBodyInput.value,
+    source_text: data?.source_text || "",
+    dialect_text: postDialectTextInput.value,
+    audio_url: data?.recommended_audio_url || "",
+    avatar: scene === "youth" ? "leaf" : scene === "elder" ? "home" : scene === "village" ? "guide" : "map",
+    persona: meta.persona,
+    author: "方言守护者",
+  };
+  publishPostBtn.disabled = true;
+  publishPostBtn.textContent = "正在发布";
+  try {
+    await fetchJson("/api/community/posts", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    state.communityScene = scene;
+    closeCommunityModal();
+    await loadCommunity(scene);
+    communityPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    communityModalOutput.innerHTML = `<div class="warn-card"><p>${escapeHtml(error.message || serverBusyMessage())}</p></div>`;
+  } finally {
+    publishPostBtn.disabled = false;
+    publishPostBtn.textContent = "发布作品";
+  }
+}
+
+function openCorrectionModal(postId) {
+  state.correctionPostId = postId;
+  correctionSuggestionInput.value = "";
+  correctionNoteInput.value = "";
+  correctionModalOutput.innerHTML = `<span>提交后会进入候选语料池，审核通过后才会反哺 RAG/知识图谱。</span>`;
+  correctionModal.hidden = false;
+  correctionSuggestionInput.focus();
+}
+
+function closeCorrectionModal() {
+  correctionModal.hidden = true;
+  state.correctionPostId = "";
+  correctionModalOutput.innerHTML = "";
+}
+
+async function submitCorrection() {
+  if (!state.correctionPostId) return;
+  submitCorrectionBtn.disabled = true;
+  submitCorrectionBtn.textContent = "正在提交";
+  try {
+    await fetchJson(`/api/community/posts/${encodeURIComponent(state.correctionPostId)}/corrections`, {
+      method: "POST",
+      body: JSON.stringify({
+        suggestion: correctionSuggestionInput.value,
+        note: correctionNoteInput.value,
+      }),
+    });
+    closeCorrectionModal();
+    await loadCommunity(state.communityScene);
+  } catch (error) {
+    correctionModalOutput.innerHTML = `<div class="warn-card"><p>${escapeHtml(error.message || serverBusyMessage())}</p></div>`;
+  } finally {
+    submitCorrectionBtn.disabled = false;
+    submitCorrectionBtn.textContent = "提交到候选池";
+  }
+}
+
 function clampMascotPosition(left, top) {
   const rect = voiceMascot.getBoundingClientRect();
   const padding = 8;
@@ -770,6 +1027,7 @@ function endMascotDrag(event) {
 }
 
 function renderResult(data) {
+  state.lastResult = data;
   const visibleWarnings = (data.warnings || []).filter(
     (item) => !(data.voice_matched_audio_url && String(item).includes("Gold Teacher synthesis failed"))
   );
@@ -817,8 +1075,14 @@ function renderResult(data) {
       }
     </div>
     ${warnings}
+    <div class="voice-continue community-share">
+      <strong>生成乡音数字分身</strong>
+      <span>把这段方言音频发布到场景社区，让作品、纠错和语料一起沉淀。</span>
+      <button type="button" id="shareResultBtn">发布到乡音社区</button>
+    </div>
     ${state.registeredVoice ? '<div class="voice-continue"><strong>音色已保存</strong><span>点击右下角吉祥物，或用下方弹窗继续使用这个声音。</span></div>' : ""}
   `;
+  document.querySelector("#shareResultBtn")?.addEventListener("click", () => openCommunityModal(true));
 }
 
 fileInput.addEventListener("change", () => {
@@ -849,6 +1113,73 @@ stopBtn.addEventListener("click", () => stopRecording());
 clearBtn.addEventListener("click", clearAudio);
 deleteAudioBtn.addEventListener("click", clearAudio);
 voiceModalClose.addEventListener("click", closeVoiceModal);
+sceneCards.forEach((card) => {
+  card.addEventListener("click", () => {
+    const scene = card.dataset.scene || "youth";
+    loadCommunity(scene);
+    communityPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+openPublishBtn.addEventListener("click", () => openCommunityModal(false));
+communityModalClose.addEventListener("click", closeCommunityModal);
+communityModal.addEventListener("click", (event) => {
+  if (event.target === communityModal) closeCommunityModal();
+});
+publishPostBtn.addEventListener("click", publishCommunityPost);
+correctionModalClose.addEventListener("click", closeCorrectionModal);
+correctionModal.addEventListener("click", (event) => {
+  if (event.target === correctionModal) closeCorrectionModal();
+});
+submitCorrectionBtn.addEventListener("click", submitCorrection);
+communityFeed.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const post = button.closest(".community-post");
+  const postId = post?.dataset.postId;
+  if (!postId) return;
+  const action = button.dataset.action;
+  if (action === "correct") {
+    openCorrectionModal(postId);
+    return;
+  }
+  button.disabled = true;
+  try {
+    await fetchJson(`/api/community/posts/${encodeURIComponent(postId)}/reactions`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    });
+    await loadCommunity(state.communityScene);
+  } catch (error) {
+    communityFeed.insertAdjacentHTML("afterbegin", `<div class="warn-card"><p>${escapeHtml(error.message)}</p></div>`);
+  } finally {
+    button.disabled = false;
+  }
+});
+communityFeed.addEventListener("submit", async (event) => {
+  const formEl = event.target.closest(".comment-form");
+  if (!formEl) return;
+  event.preventDefault();
+  const post = formEl.closest(".community-post");
+  const postId = post?.dataset.postId;
+  const input = formEl.querySelector("input");
+  if (!postId || !input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const submit = formEl.querySelector("button");
+  submit.disabled = true;
+  try {
+    await fetchJson(`/api/community/posts/${encodeURIComponent(postId)}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+    input.value = "";
+    await loadCommunity(state.communityScene);
+  } catch (error) {
+    communityFeed.insertAdjacentHTML("afterbegin", `<div class="warn-card"><p>${escapeHtml(error.message)}</p></div>`);
+  } finally {
+    submit.disabled = false;
+  }
+});
 voiceMascot.addEventListener("pointerdown", beginMascotDrag);
 voiceMascot.addEventListener("pointermove", moveMascot);
 voiceMascot.addEventListener("pointerup", endMascotDrag);
@@ -986,6 +1317,7 @@ fetchAudioLimits();
 clearAudio();
 stopDrawing();
 drawIdleWave();
+loadCommunity("youth");
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {

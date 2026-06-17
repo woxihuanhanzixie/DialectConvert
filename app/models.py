@@ -40,3 +40,31 @@ class HealthResult(BaseModel):
     ok: bool
     app: str
     configured: dict[str, bool]
+
+
+class CommunityPostCreate(BaseModel):
+    scene: str
+    dialect: str
+    title: str
+    body: str = ""
+    source_text: str = ""
+    dialect_text: str = ""
+    audio_url: str = ""
+    avatar: str = ""
+    persona: str = ""
+    author: str = ""
+
+
+class CommunityReaction(BaseModel):
+    action: Literal["like", "bookmark"]
+
+
+class CommunityCommentCreate(BaseModel):
+    text: str
+    author: str = ""
+
+
+class CommunityCorrectionCreate(BaseModel):
+    suggestion: str
+    note: str = ""
+    author: str = ""

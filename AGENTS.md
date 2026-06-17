@@ -7,10 +7,11 @@
 ## 当前结构
 
 - `app/`: FastAPI 后端。
-- `app/main.py`: HTTP 入口，提供首页、健康检查、`/api/convert`、`/api/preview-audio` 和 `/api/speak-with-voice`。
+- `app/main.py`: HTTP 入口，提供首页、健康检查、`/api/convert`、`/api/preview-audio`、`/api/speak-with-voice` 和 `/api/community/*`。
 - `app/models.py`: API 响应模型。
 - `app/pipeline.py`: 当前主链路编排，顺序为清理缓存、ASR、情绪/标点分析、**RAG 方言知识检索**、方言改写、CosyVoice 方言 instruction 构造、系统音色合成、音色注册/缓存复用、用户音色方言合成。
 - `app/providers.py`: DashScope/Qwen/CosyVoice API 调用，包括 ASR、LLM 改写（含 RAG 上下文注入）、情绪标注、音色注册和语音合成。
+- `app/community.py`: 方言数字人社区的轻量 JSON 存储与接口逻辑，保存帖子、评论、点赞收藏和待审核纠错候选；用户贡献不会直接写入 RAG 正式词库。
 - `app/rag/`: **方言 RAG 语义增强模块**（详见「RAG 方言语义增强」节）。
   - `__init__.py`: 模块入口。
   - `graph.py`: 方言知识图谱扩展接口，默认无 provider；后续 Neo4j/NetworkX/RDF 可通过 `set_dialect_graph_provider()` 注入。
@@ -19,7 +20,7 @@
   - `data/cantonese.json`: 粤语词汇对照表（77 条目）。
   - `data/sichuanese.json`: 四川话词汇对照表（70 条目）。
   - `data/hokkien.json`: 闽南话词汇对照表（73 条目）。
-- `app/storage.py`: 上传文件、输出文件、元数据、音色缓存和运行时清理。
+- `app/storage.py`: 上传文件、输出文件、元数据、音色缓存、社区数据目录和运行时清理。
 - `app/audio_utils.py`: 音频预览、时长检测、移动端格式兼容和错误识别。
 - `static/`: 单页前端。
 - `scripts/deploy_tencent_cloud_tar.sh`: 推荐部署脚本。
@@ -41,7 +42,7 @@
 9. `enroll_voice` 使用参考音频调用 CosyVoice voice-enrollment 注册音色；仅当音频 SHA256、字节数、参考时长和 target_model 均匹配时复用缓存。
 10. `synthesize`（Voice Matched）使用注册的 `voice_id` + `cosyvoice-v3.5-plus` 生成用户音色方言音频；若输出时长明显慢于参考音频，使用更快语速 instruction 自动重试一次，仍过慢则用 `ffmpeg atempo` 校准最终 MP3 时长。
 11. `recommended_audio_url` 优先使用 Voice Matched；失败回退 Gold Teacher。
-12. 前端展示结果；Voice Matched 成功后可复用 `voice_id` 继续合成。
+12. 前端展示结果；Voice Matched 成功后可复用 `voice_id` 继续合成，也可发布为“乡音数字分身”社区作品。
 
 ## 当前模型与接口配置
 
@@ -131,11 +132,19 @@ ASR → analyze_expression → retrieve_dialect_knowledge → rewrite_to_dialect
 ## 运行时与缓存
 
 - 真实转换必须配置 `DASHSCOPE_API_KEY` 和公网可回拉的 `PUBLIC_BASE_URL`。
-- `runtime_data/uploads` / `outputs` / `jobs` / `voice_cache`。
+- `runtime_data/uploads` / `outputs` / `jobs` / `voice_cache` / `community`。
+- `runtime_data/community` 保存轻量社区数据：`posts.json` 和 `corrections.json`。比赛版适合 JSON 存储；正式社区版应迁移到数据库与对象存储。
 - `cleanup_runtime`、`CLEANUP_AFTER_HOURS`、`VOICE_CACHE_TTL_HOURS` 控制磁盘增长。
 - 音色缓存 schema v2 绑定 `audio_sha256`、`audio_bytes`、`audio_duration_s` 和 `target_model`；旧 schema 或元数据不匹配不会复用。
 - `/api/convert` 响应和任务 metadata 会写入 `timings_ms`，用于排查 ASR、LLM、TTS、音色注册和音频校正的分阶段耗时。
 - `ENABLE_MOCK_WHEN_NO_KEY=1` 只用于无密钥本地演示或测试。
+
+## 方言数字人社区
+
+- 前端四个场景卡（Z世代社交、乡音陪伴、乡村振兴、侨乡寻根）是社区入口，进入对应作品流。
+- 作品结构包括场景、方言、标题、说明、原文、方言台词、音频 URL、数字分身头像和人设标签。
+- `/api/community/posts` 提供帖子创建和列表；`/reactions` 提供点赞/收藏；`/comments` 提供评论；`/corrections` 提供更地道说法候选提交。
+- `corrections.json` 是审核池，必须经人工/母语者审核后才可反哺 RAG 或知识图谱。
 
 ## 部署约定
 

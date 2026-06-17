@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0a1a10" />
     <title>声临其境 · 方言树</title>
-    <link rel="stylesheet" href="/assets/20260617-demo-v1/styles.css" />
+    <link rel="stylesheet" href="/assets/20260617-community-v1/styles.css" />
   </head>
   <body>
     <main class="app-shell">
@@ -100,7 +100,7 @@
               <div>
                 <strong>手机扫码体验</strong>
                 <span>扫描二维码打开当前演示网站。</span>
-                <a href="http://43.139.53.84/v/20260617-demo-v1" target="_blank" rel="noopener">http://43.139.53.84/v/20260617-demo-v1</a>
+                <a href="http://43.139.53.84/v/20260617-community-v1" target="_blank" rel="noopener">http://43.139.53.84/v/20260617-community-v1</a>
               </div>
             </div>
           </section>
@@ -114,25 +114,44 @@
         </div>
       </section>
 
-      <section class="culture-panel" aria-label="项目价值">
+      <section class="culture-panel" aria-label="方言社区入口">
+        <div class="section-head">
+          <div>
+            <p>方言数字人社区</p>
+            <h2>生成不是终点，乡音会继续生长</h2>
+          </div>
+          <span>作品 · 纠错 · 语料候选池</span>
+        </div>
         <div class="value-grid">
-          <article class="scene-card youth">
+          <button class="scene-card youth is-selected" type="button" data-scene="youth">
             <strong>🌱 Z世代社交</strong>
             <span>录制普通话，生成带有个性化音色的方言语音，让方言成为校园"社交货币"。</span>
-          </article>
-          <article class="scene-card elder">
+          </button>
+          <button class="scene-card elder" type="button" data-scene="elder">
             <strong>🧓 乡音陪伴</strong>
             <span>克隆远方子女声音与老人对话，用方言童谣进行怀旧治疗，建立数字温情纽带。</span>
-          </article>
-          <article class="scene-card village">
+          </button>
+          <button class="scene-card village" type="button" data-scene="village">
             <strong>🏡 乡村振兴</strong>
             <span>为古村落定制AI方言导览，让游客在声音中感受活态文化，打造农产品文化IP。</span>
-          </article>
-          <article class="scene-card overseas">
+          </button>
+          <button class="scene-card overseas" type="button" data-scene="overseas">
             <strong>🌏 侨乡寻根</strong>
             <span>连接全球乡音，让海外华裔青少年听到祖辈的方言，跨越时空数字化寻根。</span>
-          </article>
+          </button>
         </div>
+      </section>
+
+      <section class="community-panel" id="communityPanel" aria-label="乡音数字人社区">
+        <div class="community-hero">
+          <div>
+            <p id="communityEyebrow">Z世代社交</p>
+            <h2 id="communityTitle">校园里的第一条方言数字人作品</h2>
+            <span id="communityPrompt">方言表情包、宿舍配音、校园挑战榜</span>
+          </div>
+          <button class="community-publish" id="openPublishBtn" type="button">发布乡音作品</button>
+        </div>
+        <div class="community-feed" id="communityFeed" aria-live="polite"></div>
       </section>
     </main>
 
@@ -155,10 +174,68 @@
     <button class="voice-mascot" id="voiceMascot" type="button" hidden aria-label="继续使用这个音色克隆">
       <span class="mascot-bubble">点我继续使用这个音色克隆</span>
       <span class="mascot-pet" aria-hidden="true">
-        <img class="mascot-img" src="/assets/20260617-demo-v1/mascot.png" alt="" draggable="false" />
-        <img class="mascot-img mascot-blink" src="/assets/20260617-demo-v1/mascot_blink.png" alt="" draggable="false" />
+        <img class="mascot-img" src="/assets/20260617-community-v1/mascot.png" alt="" draggable="false" />
+        <img class="mascot-img mascot-blink" src="/assets/20260617-community-v1/mascot_blink.png" alt="" draggable="false" />
       </span>
     </button>
-    <script src="/assets/20260617-demo-v1/app.js"></script>
+
+    <div class="voice-modal" id="communityModal" hidden>
+      <section class="voice-modal-card community-modal-card" aria-label="发布乡音作品">
+        <div class="voice-modal-head">
+          <div>
+            <span>乡音数字分身</span>
+            <strong id="communityModalTitle">发布到社区</strong>
+          </div>
+          <button class="modal-close" id="communityModalClose" type="button" aria-label="关闭">×</button>
+        </div>
+        <label class="voice-textarea-label" for="postTitleInput">作品标题</label>
+        <input class="community-input" id="postTitleInput" maxlength="60" placeholder="例如：给外婆的粤语早安" />
+        <label class="voice-textarea-label" for="postBodyInput">作品说明</label>
+        <textarea id="postBodyInput" rows="3" maxlength="220" placeholder="写下这个数字分身适合什么场景。"></textarea>
+        <label class="voice-textarea-label" for="postDialectTextInput">方言台词</label>
+        <textarea id="postDialectTextInput" rows="3" maxlength="260" placeholder="可以使用刚生成的方言表达，也可以手动输入。"></textarea>
+        <div class="community-form-row">
+          <label>
+            <span>社区</span>
+            <select id="postSceneInput">
+              <option value="youth">Z世代社交</option>
+              <option value="elder">乡音陪伴</option>
+              <option value="village">乡村振兴</option>
+              <option value="overseas">侨乡寻根</option>
+            </select>
+          </label>
+          <label>
+            <span>方言</span>
+            <select id="postDialectInput">
+              <option value="cantonese">粤语</option>
+              <option value="sichuanese">四川话</option>
+              <option value="hokkien">闽南话</option>
+            </select>
+          </label>
+        </div>
+        <button class="modal-primary" id="publishPostBtn" type="button">发布作品</button>
+        <div class="voice-modal-output" id="communityModalOutput" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <div class="voice-modal" id="correctionModal" hidden>
+      <section class="voice-modal-card community-modal-card" aria-label="贡献更地道说法">
+        <div class="voice-modal-head">
+          <div>
+            <span>语料候选池</span>
+            <strong>贡献更地道说法</strong>
+          </div>
+          <button class="modal-close" id="correctionModalClose" type="button" aria-label="关闭">×</button>
+        </div>
+        <label class="voice-textarea-label" for="correctionSuggestionInput">更地道的表达</label>
+        <textarea id="correctionSuggestionInput" rows="3" maxlength="220" placeholder="输入你认为更自然的方言说法。"></textarea>
+        <label class="voice-textarea-label" for="correctionNoteInput">说明</label>
+        <input class="community-input" id="correctionNoteInput" maxlength="160" placeholder="例如：这个说法更适合长辈日常聊天。" />
+        <button class="modal-primary" id="submitCorrectionBtn" type="button">提交到候选池</button>
+        <div class="voice-modal-output" id="correctionModalOutput" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <script src="/assets/20260617-community-v1/app.js"></script>
   </body>
 </html>

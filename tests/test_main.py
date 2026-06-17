@@ -34,9 +34,10 @@ def test_frontend_static_assets_are_served():
 
     assert index_response.status_code == 200
     assert 'id="convertForm"' in index_response.text
-    assert "/assets/20260617-demo-v1/app.js" in index_response.text
-    assert "/assets/20260617-demo-v1/styles.css" in index_response.text
-    assert "/v/20260617-demo-v1" in index_response.text
+    assert "/assets/20260617-community-v1/app.js" in index_response.text
+    assert "/assets/20260617-community-v1/styles.css" in index_response.text
+    assert "/v/20260617-community-v1" in index_response.text
+    assert 'id="communityPanel"' in index_response.text
     assert "no-store" in index_response.headers["cache-control"]
     assert "no-cache" in index_response.headers["cache-control"]
 
@@ -46,6 +47,7 @@ def test_frontend_static_assets_are_served():
     assert 'document.querySelector("#convertForm")' in app_js_response.text
     assert "form.addEventListener" in app_js_response.text
     assert "demo-processing" in app_js_response.text
+    assert "loadCommunity" in app_js_response.text
     assert "skeleton-spinner" not in app_js_response.text
 
     assert styles_response.status_code == 200
@@ -54,15 +56,16 @@ def test_frontend_static_assets_are_served():
     assert ".app-shell" in styles_response.text
     assert ".primary" in styles_response.text
     assert ".demo-processing" in styles_response.text
+    assert ".community-post" in styles_response.text
     assert "spin 0.8s" not in styles_response.text
 
 
 def test_versioned_frontend_paths_bypass_stale_webview_cache():
     client = TestClient(app)
 
-    page = client.get("/v/20260617-demo-v1")
-    app_js = client.get("/assets/20260617-demo-v1/app.js")
-    styles = client.get("/assets/20260617-demo-v1/styles.css")
+    page = client.get("/v/20260617-community-v1")
+    app_js = client.get("/assets/20260617-community-v1/app.js")
+    styles = client.get("/assets/20260617-community-v1/styles.css")
 
     assert page.status_code == 200
     assert app_js.status_code == 200
@@ -78,6 +81,46 @@ def test_mobile_capture_content_types_are_supported():
     assert _is_supported_upload(SimpleNamespace(filename="recording.3gp", content_type="audio/3gpp"))
     assert _is_supported_upload(SimpleNamespace(filename="recording.mp4", content_type="video/mp4"))
     assert _is_supported_upload(SimpleNamespace(filename="recording.mov", content_type="video/quicktime"))
+
+
+def test_community_post_comment_reaction_and_correction_flow():
+    client = TestClient(app)
+    payload = {
+        "scene": "youth",
+        "dialect": "cantonese",
+        "title": "测试乡音数字分身",
+        "body": "比赛演示用社区作品",
+        "source_text": "大家好",
+        "dialect_text": "大家好呀",
+        "audio_url": "/media/outputs/demo.mp3",
+        "avatar": "leaf",
+        "persona": "校园方言玩家",
+    }
+
+    created = client.post("/api/community/posts", json=payload)
+    assert created.status_code == 200
+    post = created.json()
+    assert post["scene"] == "youth"
+    assert post["title"] == payload["title"]
+
+    listed = client.get("/api/community/posts", params={"scene": "youth"})
+    assert listed.status_code == 200
+    assert any(item["id"] == post["id"] for item in listed.json()["posts"])
+
+    liked = client.post(f"/api/community/posts/{post['id']}/reactions", json={"action": "like"})
+    assert liked.status_code == 200
+    assert liked.json()["likes"] >= 1
+
+    comment = client.post(f"/api/community/posts/{post['id']}/comments", json={"text": "这个场景很适合校园展示"})
+    assert comment.status_code == 200
+    assert comment.json()["text"] == "这个场景很适合校园展示"
+
+    correction = client.post(
+        f"/api/community/posts/{post['id']}/corrections",
+        json={"suggestion": "各位好啊", "note": "更像日常招呼"},
+    )
+    assert correction.status_code == 200
+    assert correction.json()["status"] == "pending_review"
 
 
 def test_non_audio_upload_is_rejected():

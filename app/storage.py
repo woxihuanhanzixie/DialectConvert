@@ -17,7 +17,8 @@ ALLOWED_AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".webm", ".flac", 
 
 
 def ensure_dirs() -> None:
-    for path in (settings.upload_dir, settings.output_dir, settings.metadata_dir, settings.cache_dir):
+    community_dir = getattr(settings, "community_dir", settings.metadata_dir.parent / "community")
+    for path in (settings.upload_dir, settings.output_dir, settings.metadata_dir, settings.cache_dir, community_dir):
         path.mkdir(parents=True, exist_ok=True)
 
 
